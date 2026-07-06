@@ -1,0 +1,32 @@
+# Values for a local kind (or Docker Desktop) cluster: dev mode (no JWT),
+# locally-built image side-loaded with `kind load docker-image`, no
+# persistence. Also keeps `helm lint -f ci/kind-values.yaml` self-contained.
+#
+#   docker build -t agentos:kind .
+#   kind load docker-image agentos:kind
+#   helm install agentos charts/agentos -f charts/agentos/ci/kind-values.yaml \
+#     --set secrets.openaiApiKey=$OPENAI_API_KEY -n agentos --create-namespace
+
+runtimeEnv: dev
+
+image:
+  repository: agentos
+  tag: kind
+  pullPolicy: Never
+
+secrets:
+  openaiApiKey: replace-me-at-install
+
+postgres:
+  auth:
+    password: kind-only-not-a-secret
+  persistence:
+    enabled: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 4Gi

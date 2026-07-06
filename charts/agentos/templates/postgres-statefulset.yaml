@@ -1,0 +1,67 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "agentos.dbFullname" . }}
+  labels:
+    {{- include "agentos.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "agentos.dbFullname" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "agentos.dbSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "agentos.dbSelectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image | quote }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: {{ include "agentos.dbSecretName" . }}
+          volumeMounts:
+            - name: data
+              # The agnohq/pgvector image keeps PGDATA under
+              # /var/lib/postgresql (same mount the family compose uses).
+              mountPath: /var/lib/postgresql
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            periodSeconds: 5
+          {{- with .Values.postgres.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- if not .Values.postgres.persistence.enabled }}
+      volumes:
+        - name: data
+          emptyDir: {}
+      {{- end }}
+  {{- if .Values.postgres.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        # PVCs don't inherit labels from anywhere — set them so teardown can
+        # find (and delete) the data volume by instance label.
+        labels:
+          {{- include "agentos.dbSelectorLabels" . | nindent 10 }}
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.postgres.persistence.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.postgres.persistence.size }}
+  {{- end }}
+{{- end }}

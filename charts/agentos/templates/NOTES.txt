@@ -1,0 +1,33 @@
+AgentOS is deploying.
+
+  Release:   {{ .Release.Name }} (namespace {{ .Release.Namespace }})
+  Runtime:   RUNTIME_ENV={{ .Values.runtimeEnv }}
+  Scheduler: AGENTOS_URL={{ include "agentos.agentosUrl" . }}
+
+Watch it come up:
+
+  kubectl rollout status deployment/{{ include "agentos.fullname" . }} -n {{ .Release.Namespace }}
+
+{{- if and .Values.ingress.enabled .Values.ingress.host }}
+
+Reach it at https://{{ .Values.ingress.host }} — interactive docs at /docs,
+MCP at /mcp.
+{{- else }}
+
+No ingress configured — reach it with a port-forward:
+
+  kubectl port-forward svc/{{ include "agentos.fullname" . }} 8000:{{ .Values.service.port }} -n {{ .Release.Namespace }}
+
+then open http://localhost:8000/docs (MCP at /mcp).
+{{- end }}
+
+{{- if and (ne .Values.runtimeEnv "dev") (not .Values.secrets.jwtVerificationKey) (not .Values.secrets.existingSecret) }}
+
+WARNING: RUNTIME_ENV={{ .Values.runtimeEnv }} with no JWT_VERIFICATION_KEY —
+AgentOS refuses to serve traffic until you add one. Mint it at
+https://os.agno.com (Connect OS → Live), add it to your env file, and run
+./scripts/k8s/env-sync.sh.
+{{- end }}
+
+Connect the OS at https://os.agno.com, or register the MCP endpoint in your
+coding agent with: uvx agno connect

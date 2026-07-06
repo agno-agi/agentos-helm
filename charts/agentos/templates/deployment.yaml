@@ -1,0 +1,125 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentos.fullname" . }}
+  labels:
+    {{- include "agentos.labels" . | nindent 4 }}
+spec:
+  # One replica by design — the scheduler runs in-process; two replicas
+  # double-fire every cron (see values.yaml).
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "agentos.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "agentos.selectorLabels" . | nindent 8 }}
+      annotations:
+        # Roll the pod when secret contents change (env-sync relies on this;
+        # a Secret update alone never restarts pods).
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        checksum/db-secret: {{ include (print $.Template.BasePath "/postgres-secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: agentos
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: RUNTIME_ENV
+              value: {{ .Values.runtimeEnv | quote }}
+            - name: WAIT_FOR_DB
+              value: "True"
+            - name: AGENTOS_URL
+              value: {{ include "agentos.agentosUrl" . | quote }}
+            - name: DB_HOST
+              value: {{ include "agentos.dbHost" . | quote }}
+            - name: DB_PORT
+              value: {{ include "agentos.dbPort" . | quote }}
+            - name: DB_USER
+              value: {{ include "agentos.dbUser" . | quote }}
+            - name: DB_DATABASE
+              value: {{ include "agentos.dbDatabase" . | quote }}
+            - name: DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentos.dbSecretName" . }}
+                  key: POSTGRES_PASSWORD
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentos.secretName" . }}
+                  key: OPENAI_API_KEY
+            {{- /* Optional keys: absent from the Secret ⇒ env var unset,
+                   matching the family's env-file semantics. */}}
+            - name: JWT_VERIFICATION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentos.secretName" . }}
+                  key: JWT_VERIFICATION_KEY
+                  optional: true
+            - name: PARALLEL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentos.secretName" . }}
+                  key: PARALLEL_API_KEY
+                  optional: true
+            - name: SLACK_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentos.secretName" . }}
+                  key: SLACK_BOT_TOKEN
+                  optional: true
+            - name: SLACK_SIGNING_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentos.secretName" . }}
+                  key: SLACK_SIGNING_SECRET
+                  optional: true
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          # /health is JWT-excluded by agno's middleware, so probes work in prd.
+          # The startup probe budgets for image pull + the entrypoint's
+          # wait-for-db gate (up to 5 minutes).
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

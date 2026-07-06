@@ -1,0 +1,107 @@
+# Default values for the AgentOS chart.
+#
+# The two values every install must provide (or point existingSecret at):
+#   secrets.openaiApiKey     — model + embedding calls
+#   postgres.auth.password   — the in-cluster database password
+# scripts/k8s/up.sh supplies both from your env file automatically.
+
+image:
+  # No official AgentOS image is published yet: build and push your own
+  # (`docker build -t <registry>/agentos:<tag> . && docker push …`), or for
+  # a local kind cluster build + `kind load docker-image` and set
+  # pullPolicy: Never. See "Deploying to Kubernetes" in the README.
+  repository: agnohq/agentos
+  tag: ""            # defaults to the chart appVersion
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# One replica BY DESIGN: the scheduler runs in-process, so two replicas
+# double-fire every cron. Scale out only after making the scheduler
+# single-instance.
+replicaCount: 1
+
+# "dev" disables JWT auth — local clusters only. Anything else (default
+# "prd") requires secrets.jwtVerificationKey or the app refuses traffic.
+runtimeEnv: prd
+
+# Scheduler base URL — cron triggers reach AgentOS over this. Empty picks a
+# sensible default: the public ingress URL when ingress is enabled, else the
+# in-cluster service DNS (which works out of the box). Set it explicitly for
+# custom domains.
+agentosUrl: ""
+
+secrets:
+  create: true
+  # Name of a pre-created Secret to use instead. Expected keys:
+  # OPENAI_API_KEY (required), JWT_VERIFICATION_KEY, PARALLEL_API_KEY,
+  # SLACK_BOT_TOKEN, SLACK_SIGNING_SECRET (all optional).
+  existingSecret: ""
+  openaiApiKey: ""
+  jwtVerificationKey: ""
+  parallelApiKey: ""
+  slackBotToken: ""
+  slackSigningSecret: ""
+
+# Extra environment variables for the api container (e.g. ENABLE_DEPLOY_CHECK,
+# ENABLE_SCHEDULED_EVALS, EVALS_TAG — see the README env table).
+extraEnv: []
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: ""
+  path: /
+  pathType: Prefix
+  # - secretName: agentos-tls
+  #   hosts: [os.example.com]
+  tls: []
+
+# Parity sizing across the template family is 2 vCPU / 4 GB (the limits);
+# requests stay modest so the chart fits small clusters.
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: "2"
+    memory: 4Gi
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# In-cluster Postgres with pgvector (the same image the family uses
+# everywhere). Disable and fill externalDatabase to bring your own — it must
+# have the pgvector extension available.
+postgres:
+  enabled: true
+  image: agnohq/pgvector:18
+  auth:
+    username: ai
+    database: ai
+    password: ""
+    # Pre-created Secret with keys POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB.
+    existingSecret: ""
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
+  resources: {}
+
+externalDatabase:
+  host: ""
+  port: 5432
+  username: ai
+  database: ai
+  password: ""
+  # Pre-created Secret with key POSTGRES_PASSWORD.
+  existingSecret: ""
