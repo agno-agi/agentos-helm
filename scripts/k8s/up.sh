@@ -12,7 +12,8 @@
 #    Prerequisites:
 #      - kubectl pointed at the target cluster, helm 3+
 #      - OPENAI_API_KEY set in environment (or .env / .env.production)
-#      - An image the cluster can pull (no official image is published yet):
+#      - An image the cluster can pull. Default: the official agnohq/agentos.
+#        Customized the platform? Build your own:
 #          docker build -t <registry>/agentos:<tag> . && docker push …
 #          IMAGE_REPOSITORY=<registry>/agentos IMAGE_TAG=<tag> ./scripts/k8s/up.sh
 #        or for kind: docker build -t agentos:kind . && kind load docker-image agentos:kind

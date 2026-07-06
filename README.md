@@ -106,9 +106,9 @@ cp .env .env.production          # or cp example.env .env.production
 
 Keeping a separate `.env.production` lets us use different values for local and production: different OpenAI keys, production-only credentials, a different Slack workspace.
 
-### 2. Build and push the image
+### 2. The image
 
-No official AgentOS image is published yet, so point the chart at one you build:
+The chart defaults to the official [`agnohq/agentos`](https://hub.docker.com/r/agnohq/agentos) image — the reference platform exactly as in this repo (`latest`, plus `agno-<pin>` tags for exact runtimes). **The moment you customize anything** — a new agent, edited instructions — build and push your own and point the chart at it:
 
 ```sh
 docker build -t <registry>/agentos:v1 .
@@ -120,7 +120,8 @@ docker push <registry>/agentos:v1
 ### 3. Deploy
 
 ```sh
-IMAGE_REPOSITORY=<registry>/agentos IMAGE_TAG=v1 ./scripts/k8s/up.sh
+./scripts/k8s/up.sh                                              # official image
+IMAGE_REPOSITORY=<registry>/agentos IMAGE_TAG=v1 ./scripts/k8s/up.sh   # your own build
 ```
 
 This helm-installs the chart into the `agentos` namespace of your current kubectl context (the script shows the context and asks first): the API deployment — **one replica by design**, the in-process scheduler must not run twice — plus in-cluster Postgres with pgvector and its volume. The script pauses and asks for a JWT verification key for authentication (see next section). To publish it behind your ingress controller, add `INGRESS_HOST=os.example.com` (and optionally `INGRESS_CLASS=nginx`); `AGENTOS_URL` then points at that host, otherwise the scheduler uses the in-cluster service DNS, which works out of the box.

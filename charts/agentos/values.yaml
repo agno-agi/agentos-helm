@@ -6,12 +6,13 @@
 # scripts/k8s/up.sh supplies both from your env file automatically.
 
 image:
-  # No official AgentOS image is published yet: build and push your own
-  # (`docker build -t <registry>/agentos:<tag> . && docker push …`), or for
-  # a local kind cluster build + `kind load docker-image` and set
-  # pullPolicy: Never. See "Deploying to Kubernetes" in the README.
+  # Defaults to the official image (the reference platform as-is; tags:
+  # latest, agno-<pin>). The moment you customize anything — new agents,
+  # edited instructions — build and push your own image and point these
+  # values at it; on a local kind cluster build + `kind load docker-image`
+  # and set pullPolicy: Never. See "Deploying to Kubernetes" in the README.
   repository: agnohq/agentos
-  tag: ""            # defaults to the chart appVersion
+  tag: "latest"
   pullPolicy: IfNotPresent
 imagePullSecrets: []
 
