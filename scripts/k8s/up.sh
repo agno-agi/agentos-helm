@@ -332,5 +332,6 @@ else
 fi
 echo -e "${DIM}Logs:           kubectl logs deploy/${FULLNAME} -n ${NAMESPACE} -f${NC}"
 echo -e "${DIM}Sync env vars:  ./scripts/k8s/env-sync.sh  (defaults to .env.production)${NC}"
+[[ -n "$INGRESS_HOST" ]] && echo -e "${DIM}Connect apps:   uvx agno connect --url https://${INGRESS_HOST}  (Claude Desktop + coding agents; mints a service-account token — see README)${NC}"
 echo -e "${DIM}Teardown:       ./scripts/k8s/down.sh${NC}"
 echo ""
