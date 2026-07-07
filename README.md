@@ -91,7 +91,7 @@ It auto-detects Claude Code, Claude Desktop, Codex, and Cursor, registers `http:
 
 ## Run in production
 
-You can run the platform anywhere that supports containerized images. This sibling deploys to any Kubernetes cluster — cloud-managed (EKS, GKE, AKS) or your own — with the Helm chart in [`charts/agentos`](charts/agentos) and a single script.
+You can run the platform anywhere that supports containerized images. This template deploys to any Kubernetes cluster — cloud-managed (EKS, GKE, AKS) or your own — with the Helm chart in [`charts/agentos`](charts/agentos) and a single script.
 
 > **Prerequisites:** [kubectl](https://kubernetes.io/docs/tasks/tools/) pointed at your cluster, [Helm](https://helm.sh/docs/intro/install/) 3+, and a container registry the cluster can pull from.
 
