@@ -127,6 +127,21 @@ spec:
             periodSeconds: 20
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.secrets.jwtJwks }}
+          volumeMounts:
+            - name: jwks
+              mountPath: /etc/agentos
+              readOnly: true
+          {{- end }}
+      {{- if .Values.secrets.jwtJwks }}
+      volumes:
+        - name: jwks
+          secret:
+            secretName: {{ include "agentos.secretName" . }}
+            items:
+              - key: JWT_JWKS
+                path: jwks.json
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
