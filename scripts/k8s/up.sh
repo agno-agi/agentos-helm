@@ -180,6 +180,21 @@ yaml_sq() {
     printf "'%s'" "$v"
 }
 
+# JWT_JWKS_FILE in the env file names a path inside the container (compose
+# bind-mounts the repo at /app). The chart ships the file's CONTENT instead,
+# so resolve the local file behind that path: as-is first, then /app/…
+# against the repo root.
+resolve_jwks_local_file() {
+    local path="$1"
+    if [[ -f "$path" ]]; then
+        printf '%s' "$path"
+    elif [[ "$path" == /app/* && -f "${path#/app/}" ]]; then
+        printf '%s' "${path#/app/}"
+    else
+        return 1
+    fi
+}
+
 ENV_FILE=""
 [[ -f .env.production ]] && ENV_FILE=".env.production"
 [[ -z "$ENV_FILE" && -f .env ]] && ENV_FILE=".env"
@@ -286,6 +301,21 @@ if [[ -n "$AUTH_REQUIRES_JWT" && -z "$JWT_VERIFICATION_KEY" && -z "$JWT_JWKS_FIL
     [[ -n "$ENV_FILE" ]] && load_env_file "$ENV_FILE"
 fi
 
+# JWT_JWKS_FILE satisfies production auth above, but only if the pod can
+# actually read the file. The chart ships its CONTENT and mounts it — a
+# dangling local path must fail here, not deploy a release agno refuses to
+# start. (File baked into a custom image instead? Set the chart value
+# jwtJwksFile directly via helm — this guard only covers the env-file flow.)
+JWKS_LOCAL=""
+if [[ -n "$JWT_JWKS_FILE" ]]; then
+    JWKS_LOCAL="$(resolve_jwks_local_file "$JWT_JWKS_FILE")" || true
+    if [[ -z "$JWKS_LOCAL" || ! -r "$JWKS_LOCAL" || ! -s "$JWKS_LOCAL" ]]; then
+        echo "JWT_JWKS_FILE=${JWT_JWKS_FILE} doesn't resolve to a readable, non-empty local file"
+        echo "(tried the path as-is, then /app/… against the repo root). Fix the path or unset it."
+        exit 1
+    fi
+fi
+
 if [[ -n "$AUTH_REQUIRES_JWT" && -z "$JWT_VERIFICATION_KEY" && -z "$JWT_JWKS_FILE" ]]; then
     echo ""
     echo -e "${DIM}Deploying without JWT auth config — the app will refuse traffic until${NC}"
@@ -304,8 +334,9 @@ trap 'rm -f "$VALUES_FILE"' EXIT
     if [[ -n "$AGENTOS_URL" ]]; then
         printf 'agentosUrl: %s\n' "$(yaml_sq "$AGENTOS_URL")"
     fi
-    if [[ -n "$JWT_JWKS_FILE" ]]; then
-        printf 'jwtJwksFile: %s\n' "$(yaml_sq "$JWT_JWKS_FILE")"
+    if [[ -n "$JWKS_LOCAL" ]]; then
+        # The content rides secrets.jwtJwks (below); the pod reads the mount.
+        printf 'jwtJwksFile: /etc/agentos/jwks.json\n'
     fi
     if [[ -n "$IMAGE_REPOSITORY" || -n "$IMAGE_TAG" || -n "$IMAGE_PULL_POLICY" ]]; then
         printf 'image:\n'
@@ -322,6 +353,10 @@ trap 'rm -f "$VALUES_FILE"' EXIT
     if [[ -n "$JWT_VERIFICATION_KEY" ]]; then
         printf '  jwtVerificationKey: |-\n'
         printf '%s\n' "$JWT_VERIFICATION_KEY" | sed 's/^/    /'
+    fi
+    if [[ -n "$JWKS_LOCAL" ]]; then
+        printf '  jwtJwks: |-\n'
+        printf '%s\n' "$(cat "$JWKS_LOCAL")" | sed 's/^/    /'
     fi
     if [[ -n "$MCP_CONNECT_SECRET" ]]; then printf '  mcpConnectSecret: %s\n' "$(yaml_sq "$MCP_CONNECT_SECRET")"; fi
     if [[ -n "$AGENTOS_MCP_SIGNING_KEY" ]]; then printf '  agentosMcpSigningKey: %s\n' "$(yaml_sq "$AGENTOS_MCP_SIGNING_KEY")"; fi
