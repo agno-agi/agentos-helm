@@ -1,6 +1,6 @@
 apiVersion: v2
 name: agentos
-description: AgentOS — one agent backend for every frontend, built on Agno. REST + MCP + chat interfaces, Postgres (pgvector) persistence, in-process scheduler.
+description: AgentOS — The Agent Platform That Builds Itself, built on Agno. REST + MCP + chat interfaces, Postgres (pgvector) persistence, in-process scheduler.
 type: application
 version: 0.1.0
 appVersion: "1.0.0"
