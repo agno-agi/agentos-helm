@@ -20,6 +20,7 @@
 set -e
 
 # Colors
+ORANGE='\033[38;5;208m'
 DIM='\033[2m'
 BOLD='\033[1m'
 RED='\033[31m'
@@ -42,7 +43,9 @@ if ! helm status "$RELEASE" -n "$NAMESPACE" &> /dev/null; then
 fi
 
 echo ""
-echo -e "${BOLD}This deletes from context ${CONTEXT}, namespace ${NAMESPACE}:${NC}"
+echo -e "${ORANGE}▸${NC} ${BOLD}Kubernetes Teardown${NC}"
+echo ""
+echo -e "This deletes from context ${CONTEXT}, namespace ${NAMESPACE}:"
 echo -e "  - release   ${RELEASE} (api + database)"
 echo -e "  - volume    the Postgres PVC  ${RED}(all data deleted)${NC}"
 echo ""
@@ -57,14 +60,14 @@ if [[ "$1" != "--yes" ]]; then
 fi
 
 echo ""
-echo -e "${BOLD}Uninstalling ${RELEASE}...${NC}"
+echo -e "${DIM}> helm uninstall ${RELEASE} -n ${NAMESPACE} --wait${NC}"
 helm uninstall "$RELEASE" -n "$NAMESPACE" --wait \
     || echo -e "${DIM}Uninstall returned non-zero — verifying below${NC}"
 
 # volumeClaimTemplates PVCs survive uninstall by design; they carry the
 # instance label (set in the chart) so they can be deleted here.
 echo ""
-echo -e "${BOLD}Deleting database volume...${NC}"
+echo -e "${DIM}> kubectl delete pvc -n ${NAMESPACE} -l app.kubernetes.io/instance=${RELEASE}${NC}"
 kubectl delete pvc -n "$NAMESPACE" \
     -l "app.kubernetes.io/instance=${RELEASE}" \
     --ignore-not-found --timeout=120s
@@ -73,14 +76,14 @@ kubectl delete pvc -n "$NAMESPACE" \
 # knows it — an API blip mid-uninstall would otherwise read as success.
 if helm status "$RELEASE" -n "$NAMESPACE" &> /dev/null; then
     echo ""
-    echo -e "${BOLD}Teardown incomplete${NC} — helm still lists the release. Retry:"
+    echo -e "${RED}${BOLD}Teardown incomplete${NC} — helm still lists the release. Retry:"
     echo -e "${DIM}  helm uninstall ${RELEASE} -n ${NAMESPACE}${NC}"
     exit 1
 fi
 LEFT="$(kubectl get pods,pvc -n "$NAMESPACE" -l "app.kubernetes.io/instance=${RELEASE}" -o name 2> /dev/null || true)"
 if [[ -n "$LEFT" ]]; then
     echo ""
-    echo -e "${BOLD}Teardown incomplete${NC} — still present:"
+    echo -e "${RED}${BOLD}Teardown incomplete${NC} — still present:"
     echo "$LEFT"
     exit 1
 fi

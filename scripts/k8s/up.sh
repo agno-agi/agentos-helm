@@ -23,7 +23,9 @@
 #    INGRESS_HOST, INGRESS_CLASS.
 #
 #    Deploys into the CURRENT kubectl context (asks first on a TTY; --yes
-#    or non-interactive runs proceed against the printed context). Pauses
+#    or non-interactive runs proceed against the printed context). Generates
+#    MCP_CONNECT_SECRET (chat-app OAuth) into the env file when missing and
+#    the deploy has a public URL (INGRESS_HOST or AGENTOS_URL), and pauses
 #    for JWT_VERIFICATION_KEY when production auth would otherwise prevent
 #    the deploy from serving. DB_PASS is generated once and written back to
 #    your env file — keep it, the database volume remembers it.
@@ -215,7 +217,7 @@ NAMESPACE="${AGENTOS_NAMESPACE:-agentos}"
 RELEASE="${AGENTOS_RELEASE:-agentos}"
 
 echo ""
-echo -e "${BOLD}Deploying to kubectl context: ${CONTEXT}${NC}  ${DIM}(namespace ${NAMESPACE}, release ${RELEASE})${NC}"
+echo -e "${ORANGE}▸${NC} ${BOLD}Deploying to kubectl context: ${CONTEXT}${NC}  ${DIM}(namespace ${NAMESPACE}, release ${RELEASE})${NC}"
 if [[ "$1" != "--yes" && -t 0 ]]; then
     printf "Continue? [y/N] "
     IFS= read -r GO
@@ -235,6 +237,20 @@ if [[ -z "$DB_PASS" ]]; then
     echo -e "${DIM}Generated DB_PASS (saved to ${ENV_FILE})${NC}"
 fi
 
+# MCP OAuth — claude.ai and ChatGPT (web) connect over OAuth only, and the
+# consent page is gated by MCP_CONNECT_SECRET, so the user must create the secret manually.
+# We generate a secret on behalf of the user when the env file doesn't have
+# one — but only when the deploy gets a public URL (INGRESS_HOST or an
+# explicit AGENTOS_URL): without one, OAuth metadata would advertise the
+# in-cluster service DNS, which hosted chat apps can't reach.
+if [[ -z "$MCP_CONNECT_SECRET" && ( -n "$INGRESS_HOST" || -n "$AGENTOS_URL" ) ]]; then
+    MCP_CONNECT_SECRET="$(openssl rand -base64 32)"
+    export MCP_CONNECT_SECRET
+    ENV_FILE="${ENV_FILE:-.env.production}"
+    persist_env_var MCP_CONNECT_SECRET "$MCP_CONNECT_SECRET" "$ENV_FILE"
+    echo -e "${DIM}Generated MCP_CONNECT_SECRET (saved to ${ENV_FILE})${NC}"
+fi
+
 AUTH_REQUIRES_JWT=1
 [[ "${RUNTIME_ENV:-prd}" == "dev" ]] && AUTH_REQUIRES_JWT=""
 
@@ -243,7 +259,7 @@ AUTH_REQUIRES_JWT=1
 # deploy come up serving.
 if [[ -n "$AUTH_REQUIRES_JWT" && -z "$JWT_VERIFICATION_KEY" && -z "$JWT_JWKS_FILE" && -t 0 ]]; then
     echo ""
-    echo -e "${BOLD}JWT_VERIFICATION_KEY not set${NC} — AgentOS won't serve production traffic without auth."
+    echo -e "${ORANGE}▸${NC} ${BOLD}JWT_VERIFICATION_KEY not set${NC} — AgentOS won't serve production traffic without auth."
     echo -e "  1. Open ${BOLD}https://os.agno.com${NC} -> Connect OS -> Live -> enter ${INGRESS_HOST:+https://}${INGRESS_HOST:-your AgentOS URL}"
     echo -e "  2. Name it ${BOLD}Live AgentOS${NC}"
     echo -e "  3. Note: Live AgentOS Connections are a paid feature; use ${BOLD}PLATFORM30${NC} to get 1 month off"
@@ -304,6 +320,8 @@ trap 'rm -f "$VALUES_FILE"' EXIT
         printf '  jwtVerificationKey: |-\n'
         printf '%s\n' "$JWT_VERIFICATION_KEY" | sed 's/^/    /'
     fi
+    if [[ -n "$MCP_CONNECT_SECRET" ]]; then printf '  mcpConnectSecret: %s\n' "$(yaml_sq "$MCP_CONNECT_SECRET")"; fi
+    if [[ -n "$AGENTOS_MCP_SIGNING_KEY" ]]; then printf '  agentosMcpSigningKey: %s\n' "$(yaml_sq "$AGENTOS_MCP_SIGNING_KEY")"; fi
     if [[ -n "$PARALLEL_API_KEY" ]]; then printf '  parallelApiKey: %s\n' "$(yaml_sq "$PARALLEL_API_KEY")"; fi
     if [[ -n "$SLACK_BOT_TOKEN" ]]; then printf '  slackBotToken: %s\n' "$(yaml_sq "$SLACK_BOT_TOKEN")"; fi
     if [[ -n "$SLACK_SIGNING_SECRET" ]]; then printf '  slackSigningSecret: %s\n' "$(yaml_sq "$SLACK_SIGNING_SECRET")"; fi
@@ -311,7 +329,9 @@ trap 'rm -f "$VALUES_FILE"' EXIT
 } >> "$VALUES_FILE"
 
 echo ""
-echo -e "${BOLD}Installing ${RELEASE} into ${NAMESPACE}...${NC}"
+echo -e "${ORANGE}▸${NC} ${BOLD}Installing ${RELEASE} into ${NAMESPACE}${NC}"
+echo ""
+echo -e "${DIM}> helm upgrade --install ${RELEASE} charts/agentos -n ${NAMESPACE}${NC}"
 echo ""
 helm upgrade --install "$RELEASE" charts/agentos \
     --namespace "$NAMESPACE" --create-namespace \
@@ -331,7 +351,13 @@ else
     echo -e "${DIM}                then http://localhost:8000/docs${NC}"
 fi
 echo -e "${DIM}Logs:           kubectl logs deploy/${FULLNAME} -n ${NAMESPACE} -f${NC}"
-echo -e "${DIM}Sync env vars:  ./scripts/k8s/env-sync.sh  (defaults to .env.production)${NC}"
-[[ -n "$INGRESS_HOST" ]] && echo -e "${DIM}Connect apps:   uvx agno connect --url https://${INGRESS_HOST}  (Claude Desktop + coding agents; mints a service-account token — see README)${NC}"
+echo -e "${DIM}Sync env vars:  ./scripts/k8s/env-sync.sh${NC}"
+[[ -n "$INGRESS_HOST" ]] && echo -e "${DIM}Connect apps:   uvx agno connect --url https://${INGRESS_HOST}${NC}"
+if [[ -n "$INGRESS_HOST" && -n "$MCP_CONNECT_SECRET" ]]; then
+    echo -e "${DIM}Chat apps:      add https://${INGRESS_HOST}/mcp as a custom connector in claude.ai / ChatGPT${NC}"
+    echo -e "${DIM}                (leave the optional OAuth client ID/secret fields empty).${NC}"
+    echo -e "${DIM}                Then click Connect and approve the consent page with this secret:${NC}"
+    echo -e "${BOLD}                ${MCP_CONNECT_SECRET}${NC}"
+fi
 echo -e "${DIM}Teardown:       ./scripts/k8s/down.sh${NC}"
 echo ""
