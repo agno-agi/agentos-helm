@@ -34,6 +34,9 @@ runtimeEnv: prd
 # custom domains.
 agentosUrl: ""
 
+# Path to a JWKS file inside the container — alternative to secrets.jwtVerificationKey for prd JWT verification.
+jwtJwksFile: ""
+
 secrets:
   create: true
   # Name of a pre-created Secret to use instead. Expected keys:

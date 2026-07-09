@@ -304,6 +304,9 @@ trap 'rm -f "$VALUES_FILE"' EXIT
     if [[ -n "$AGENTOS_URL" ]]; then
         printf 'agentosUrl: %s\n' "$(yaml_sq "$AGENTOS_URL")"
     fi
+    if [[ -n "$JWT_JWKS_FILE" ]]; then
+        printf 'jwtJwksFile: %s\n' "$(yaml_sq "$JWT_JWKS_FILE")"
+    fi
     if [[ -n "$IMAGE_REPOSITORY" || -n "$IMAGE_TAG" || -n "$IMAGE_PULL_POLICY" ]]; then
         printf 'image:\n'
         if [[ -n "$IMAGE_REPOSITORY" ]]; then printf '  repository: %s\n' "$(yaml_sq "$IMAGE_REPOSITORY")"; fi

@@ -43,6 +43,10 @@ spec:
               value: "True"
             - name: AGENTOS_URL
               value: {{ include "agentos.agentosUrl" . | quote }}
+            {{- with .Values.jwtJwksFile }}
+            - name: JWT_JWKS_FILE
+              value: {{ . | quote }}
+            {{- end }}
             - name: DB_HOST
               value: {{ include "agentos.dbHost" . | quote }}
             - name: DB_PORT

@@ -107,6 +107,7 @@ trap 'rm -f "$VALUES_FILE"' EXIT
 {
     if [[ -n "$RUNTIME_ENV" ]]; then printf 'runtimeEnv: %s\n' "$(yaml_sq "$RUNTIME_ENV")"; fi
     if [[ -n "$AGENTOS_URL" ]]; then printf 'agentosUrl: %s\n' "$(yaml_sq "$AGENTOS_URL")"; fi
+    if [[ -n "$JWT_JWKS_FILE" ]]; then printf 'jwtJwksFile: %s\n' "$(yaml_sq "$JWT_JWKS_FILE")"; fi
     printf 'secrets:\n'
     printf '  openaiApiKey: %s\n' "$(yaml_sq "$OPENAI_API_KEY")"
     if [[ -n "$JWT_VERIFICATION_KEY" ]]; then
