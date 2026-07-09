@@ -53,7 +53,7 @@ fi
 # against a release stuck in failed/pending-* (e.g. an interrupted install)
 # it errors "has no deployed releases". Catch that early and point at the
 # fix. Blocks only on a positively-detected non-deployed status.
-RELEASE_STATUS="$(helm status "$RELEASE" -n "$NAMESPACE" -o json 2> /dev/null | grep -o '"status":"[^"]*"' | head -n 1 | cut -d '"' -f 4)"
+RELEASE_STATUS="$(helm status "$RELEASE" -n "$NAMESPACE" -o json 2> /dev/null | grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1 | cut -d '"' -f 4)"
 if [[ -n "$RELEASE_STATUS" && "$RELEASE_STATUS" != "deployed" ]]; then
     echo "Release '${RELEASE}' is in status '${RELEASE_STATUS}' — helm can only upgrade a deployed release."
     echo "Re-run ./scripts/k8s/up.sh to repair it (a stuck pending-* release needs 'helm rollback' or './scripts/k8s/down.sh' first)."
