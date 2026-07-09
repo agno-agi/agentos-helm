@@ -37,11 +37,20 @@ agentosUrl: ""
 secrets:
   create: true
   # Name of a pre-created Secret to use instead. Expected keys:
-  # OPENAI_API_KEY (required), JWT_VERIFICATION_KEY, PARALLEL_API_KEY,
-  # SLACK_BOT_TOKEN, SLACK_SIGNING_SECRET (all optional).
+  # OPENAI_API_KEY (required), JWT_VERIFICATION_KEY, MCP_CONNECT_SECRET,
+  # AGENTOS_MCP_SIGNING_KEY, PARALLEL_API_KEY, SLACK_BOT_TOKEN,
+  # SLACK_SIGNING_SECRET (all optional).
   existingSecret: ""
   openaiApiKey: ""
   jwtVerificationKey: ""
+  # MCP OAuth consent secret (≥16 chars) — set to turn /mcp into its own
+  # OAuth 2.1 authorization server so claude.ai / ChatGPT (web) can connect.
+  # scripts/k8s/up.sh generates one into your env file when the deploy has a
+  # public URL (INGRESS_HOST or AGENTOS_URL).
+  mcpConnectSecret: ""
+  # Optional high-entropy signing-key material (≥32 chars) for OAuth tokens;
+  # unset, a strong key is generated and persisted in the database.
+  agentosMcpSigningKey: ""
   parallelApiKey: ""
   slackBotToken: ""
   slackSigningSecret: ""

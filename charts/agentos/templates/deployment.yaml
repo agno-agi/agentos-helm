@@ -69,6 +69,18 @@ spec:
                   name: {{ include "agentos.secretName" . }}
                   key: JWT_VERIFICATION_KEY
                   optional: true
+            - name: MCP_CONNECT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentos.secretName" . }}
+                  key: MCP_CONNECT_SECRET
+                  optional: true
+            - name: AGENTOS_MCP_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentos.secretName" . }}
+                  key: AGENTOS_MCP_SIGNING_KEY
+                  optional: true
             - name: PARALLEL_API_KEY
               valueFrom:
                 secretKeyRef:

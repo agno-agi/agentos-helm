@@ -21,6 +21,7 @@
 set -e
 
 # Colors
+ORANGE='\033[38;5;208m'
 DIM='\033[2m'
 BOLD='\033[1m'
 NC='\033[0m'
@@ -44,13 +45,19 @@ FULLNAME="$RELEASE"
 
 echo ""
 if [[ -n "$IMAGE_TAG" ]]; then
-    echo -e "${BOLD}Rolling ${RELEASE} to image tag ${IMAGE_TAG}...${NC}"
+    echo -e "${ORANGE}▸${NC} ${BOLD}Rolling ${RELEASE} to image tag ${IMAGE_TAG}${NC}"
+    echo ""
+    echo -e "${DIM}> helm upgrade ${RELEASE} charts/agentos --reuse-values --set-string image.tag=${IMAGE_TAG}${NC}"
+    echo ""
     helm upgrade "$RELEASE" charts/agentos \
         --namespace "$NAMESPACE" \
         --reuse-values --set-string "image.tag=${IMAGE_TAG}" \
         --wait --timeout 10m
 else
-    echo -e "${BOLD}Restarting ${FULLNAME}...${NC}"
+    echo -e "${ORANGE}▸${NC} ${BOLD}Restarting ${FULLNAME}${NC}"
+    echo ""
+    echo -e "${DIM}> kubectl rollout restart deployment/${FULLNAME} -n ${NAMESPACE}${NC}"
+    echo ""
     kubectl rollout restart "deployment/${FULLNAME}" -n "$NAMESPACE"
     kubectl rollout status "deployment/${FULLNAME}" -n "$NAMESPACE" --timeout 10m
 fi

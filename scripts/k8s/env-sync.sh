@@ -21,6 +21,7 @@
 set -e
 
 # Colors
+ORANGE='\033[38;5;208m'
 DIM='\033[2m'
 BOLD='\033[1m'
 NC='\033[0m'
@@ -92,7 +93,10 @@ if [[ -z "$OPENAI_API_KEY" ]]; then
 fi
 
 echo ""
-echo -e "${BOLD}Syncing env from ${ENV_FILE} to release ${RELEASE} (namespace ${NAMESPACE})...${NC}"
+echo -e "${ORANGE}▸${NC} ${BOLD}Syncing env vars${NC}"
+echo ""
+echo -e "${DIM}> ${ENV_FILE} -> release ${RELEASE} (namespace ${NAMESPACE})${NC}"
+echo ""
 
 mkdir -p tmp
 VALUES_FILE="tmp/values-secrets.yaml"
@@ -109,6 +113,8 @@ trap 'rm -f "$VALUES_FILE"' EXIT
         printf '  jwtVerificationKey: |-\n'
         printf '%s\n' "$JWT_VERIFICATION_KEY" | sed 's/^/    /'
     fi
+    if [[ -n "$MCP_CONNECT_SECRET" ]]; then printf '  mcpConnectSecret: %s\n' "$(yaml_sq "$MCP_CONNECT_SECRET")"; fi
+    if [[ -n "$AGENTOS_MCP_SIGNING_KEY" ]]; then printf '  agentosMcpSigningKey: %s\n' "$(yaml_sq "$AGENTOS_MCP_SIGNING_KEY")"; fi
     if [[ -n "$PARALLEL_API_KEY" ]]; then printf '  parallelApiKey: %s\n' "$(yaml_sq "$PARALLEL_API_KEY")"; fi
     if [[ -n "$SLACK_BOT_TOKEN" ]]; then printf '  slackBotToken: %s\n' "$(yaml_sq "$SLACK_BOT_TOKEN")"; fi
     if [[ -n "$SLACK_SIGNING_SECRET" ]]; then printf '  slackSigningSecret: %s\n' "$(yaml_sq "$SLACK_SIGNING_SECRET")"; fi
