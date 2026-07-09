@@ -170,8 +170,15 @@ def _format_report(checks: list[CheckResult]) -> str:
     warned = sum(1 for check in checks if check.status == "WARN")
     overall = "FAIL" if failed else "WARN" if warned else "PASS"
 
+    # Stamp the context the checks ran under, so stored reports stay self-describing
+    # when read later. Defaults must match what _check_runtime and _check_agentos_url read.
+    runtime_env = getenv("RUNTIME_ENV", "prd")
+    agentos_url = getenv("AGENTOS_URL", "http://127.0.0.1:8000")
+
     lines = [
         "# Deployment Check",
+        "",
+        f"Environment: {runtime_env} | AgentOS URL: {agentos_url}",
         "",
         f"Overall: **{overall}** ({failed} failed, {warned} warning)",
         "",
