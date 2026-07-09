@@ -25,7 +25,9 @@ fullnameOverride: ""
 replicaCount: 1
 
 # "dev" disables JWT auth — local clusters only. Anything else (default
-# "prd") requires secrets.jwtVerificationKey or the app refuses traffic.
+# "prd") requires secrets.jwtVerificationKey or a JWKS (jwtJwksFile /
+# secrets.jwtJwks) or the app exits at startup (the pod crash-loops until
+# a key arrives).
 runtimeEnv: prd
 
 # Scheduler base URL — cron triggers reach AgentOS over this. Empty picks a
