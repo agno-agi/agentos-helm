@@ -134,7 +134,7 @@ Bringing your own Postgres instead? It must have the [pgvector](https://github.c
 
 ### 4. Production Auth
 
-Token-Based Authorization is on by default. Without a `JWT_VERIFICATION_KEY` or `JWT_JWKS_FILE`, the app refuses to serve traffic in production. The platform's job is to keep your data private, so the safe default is "refuse to start" without an authentication token.
+Token-Based Authorization is on by default. Without a `JWT_VERIFICATION_KEY` or `JWT_JWKS_FILE`, the app refuses to start in production — the process exits at startup, so the pod crash-loops until a key arrives. The platform's job is to keep your data private, so the safe default is "refuse to start" without an authentication token.
 
 Token-Based Auth gives you three things:
 
@@ -159,7 +159,7 @@ MIIBIjANBgkq...
 
 > **Heads up.** Live AgentOS Connections are a paid feature. Use `PLATFORM30` to get 1 month off. We are working on a free trial so you don't have to pay to try.
 
-If you run non-interactively or skip the prompt, you can sync environment variables later with `./scripts/k8s/env-sync.sh`.
+If you run non-interactively or skip the prompt, `up.sh` still installs the release but skips the readiness wait — the keyless app exits at startup, so the pod crash-loops until you add the key to your env file and run `./scripts/k8s/env-sync.sh`, which rolls the pod and waits for it to come up.
 
 ### 5. Register your production AgentOS to MCP clients
 
