@@ -80,6 +80,12 @@ if helm status "$RELEASE" -n "$NAMESPACE" &> /dev/null; then
     echo -e "${DIM}  helm uninstall ${RELEASE} -n ${NAMESPACE}${NC}"
     exit 1
 fi
+# helm's --wait covers the release's resources, not the pods they own —
+# those are removed by cascading GC and linger in Terminating for their
+# grace period. Give them that window before judging leftovers.
+kubectl wait pods -n "$NAMESPACE" \
+    -l "app.kubernetes.io/instance=${RELEASE}" \
+    --for=delete --timeout=90s > /dev/null 2>&1 || true
 LEFT="$(kubectl get pods,pvc -n "$NAMESPACE" -l "app.kubernetes.io/instance=${RELEASE}" -o name 2> /dev/null || true)"
 if [[ -n "$LEFT" ]]; then
     echo ""
