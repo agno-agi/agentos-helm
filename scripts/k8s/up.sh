@@ -176,6 +176,17 @@ ${line}"
     export JWT_VERIFICATION_KEY
 }
 
+# The env-sync command as the user must type it: env-sync.sh only defaults to
+# .env.production, so when this install ran from another file (.env), every
+# message pointing at env-sync has to carry that file or the command fails.
+env_sync_cmd() {
+    if [[ -n "$ENV_FILE" && "$ENV_FILE" != ".env.production" ]]; then
+        printf './scripts/k8s/env-sync.sh %s' "$ENV_FILE"
+    else
+        printf './scripts/k8s/env-sync.sh'
+    fi
+}
+
 # YAML single-quoted scalar (doubles embedded single quotes)
 yaml_sq() {
     local v="${1//\'/\'\'}"
@@ -294,7 +305,7 @@ if [[ -n "$AUTH_REQUIRES_JWT" && -z "$JWT_VERIFICATION_KEY" && -z "$JWT_JWKS_FIL
             echo -e "${DIM}  Saved JWT_VERIFICATION_KEY to ${ENV_FILE}${NC}"
         else
             echo -e "${BOLD}Warning:${NC} couldn't parse the pasted JWT_VERIFICATION_KEY."
-            echo -e "${DIM}  Save it to ${ENV_FILE:-.env.production} and run ./scripts/k8s/env-sync.sh if auth is still missing.${NC}"
+            echo -e "${DIM}  Save it to ${ENV_FILE:-.env.production} and run $(env_sync_cmd) if auth is still missing.${NC}"
         fi
     else
         [[ -f .env.production ]] && ENV_FILE=".env.production"
@@ -324,7 +335,7 @@ if [[ -n "$AUTH_REQUIRES_JWT" && -z "$JWT_VERIFICATION_KEY" && -z "$JWT_JWKS_FIL
     echo ""
     echo -e "${DIM}Deploying without JWT auth config — the app exits at startup, so the pod${NC}"
     echo -e "${DIM}will crash-loop until you add JWT_VERIFICATION_KEY to ${ENV_FILE:-.env.production}${NC}"
-    echo -e "${DIM}and run ./scripts/k8s/env-sync.sh. Skipping the readiness wait.${NC}"
+    echo -e "${DIM}and run $(env_sync_cmd). Skipping the readiness wait.${NC}"
 fi
 
 # Secrets ride a values file (0600, deleted on exit), not --set args.
@@ -401,7 +412,7 @@ if [[ -n "$JWT_KEY_MISSING" ]]; then
     echo -e "one (it exits at startup rather than serve production traffic unauthenticated)."
     echo -e "  1. Mint the key at ${BOLD}https://os.agno.com${NC} -> Connect OS -> Live (README \"Production Auth\")"
     echo -e "  2. Add JWT_VERIFICATION_KEY to ${ENV_FILE:-.env.production}"
-    echo -e "  3. Run ${BOLD}./scripts/k8s/env-sync.sh${NC} — it updates the Secret, rolls the pod, and waits"
+    echo -e "  3. Run ${BOLD}$(env_sync_cmd)${NC} — it updates the Secret, rolls the pod, and waits"
     echo -e "${DIM}Watch pods (Error/CrashLoopBackOff until then):  kubectl get pods -n ${NAMESPACE}${NC}"
 else
     echo -e "${BOLD}Done.${NC}"
@@ -413,7 +424,7 @@ else
     echo -e "${DIM}                then http://localhost:8000/docs${NC}"
 fi
 echo -e "${DIM}Logs:           kubectl logs deploy/${FULLNAME} -n ${NAMESPACE} -f${NC}"
-echo -e "${DIM}Sync env vars:  ./scripts/k8s/env-sync.sh${NC}"
+echo -e "${DIM}Sync env vars:  $(env_sync_cmd)${NC}"
 [[ -n "$INGRESS_HOST" ]] && echo -e "${DIM}Connect apps:   uvx agno connect --url https://${INGRESS_HOST}${NC}"
 if [[ -n "$INGRESS_HOST" && -n "$MCP_CONNECT_SECRET" ]]; then
     echo -e "${DIM}Chat apps:      add https://${INGRESS_HOST}/mcp as a custom connector in claude.ai / ChatGPT${NC}"
