@@ -26,9 +26,11 @@
 #    or non-interactive runs proceed against the printed context). Generates
 #    MCP_CONNECT_SECRET (chat-app OAuth) into the env file when missing and
 #    the deploy has a public URL (INGRESS_HOST or AGENTOS_URL), and pauses
-#    for JWT_VERIFICATION_KEY when production auth would otherwise prevent
-#    the deploy from serving. DB_PASS is generated once and written back to
-#    your env file — keep it, the database volume remembers it.
+#    for JWT_VERIFICATION_KEY when production auth is on — without a key
+#    the app exits at startup, so a keyless install skips the readiness
+#    wait and the pod crash-loops until env-sync.sh delivers the key.
+#    DB_PASS is generated once and written back to your env file — keep
+#    it, the database volume remembers it.
 #
 ############################################################################
 
@@ -174,10 +176,36 @@ ${line}"
     export JWT_VERIFICATION_KEY
 }
 
+# The env-sync command as the user must type it: env-sync.sh only defaults to
+# .env.production, so when this install ran from another file (.env), every
+# message pointing at env-sync has to carry that file or the command fails.
+env_sync_cmd() {
+    if [[ -n "$ENV_FILE" && "$ENV_FILE" != ".env.production" ]]; then
+        printf './scripts/k8s/env-sync.sh %s' "$ENV_FILE"
+    else
+        printf './scripts/k8s/env-sync.sh'
+    fi
+}
+
 # YAML single-quoted scalar (doubles embedded single quotes)
 yaml_sq() {
     local v="${1//\'/\'\'}"
     printf "'%s'" "$v"
+}
+
+# JWT_JWKS_FILE in the env file names a path inside the container (compose
+# bind-mounts the repo at /app). The chart ships the file's CONTENT instead,
+# so resolve the local file behind that path: as-is first, then /app/…
+# against the repo root.
+resolve_jwks_local_file() {
+    local path="$1"
+    if [[ -f "$path" ]]; then
+        printf '%s' "$path"
+    elif [[ "$path" == /app/* && -f "${path#/app/}" ]]; then
+        printf '%s' "${path#/app/}"
+    else
+        return 1
+    fi
 }
 
 ENV_FILE=""
@@ -254,12 +282,12 @@ fi
 AUTH_REQUIRES_JWT=1
 [[ "${RUNTIME_ENV:-prd}" == "dev" ]] && AUTH_REQUIRES_JWT=""
 
-# JWT auth is on in prd and the app refuses to serve without a verification
+# JWT auth is on in prd and the app exits at startup without a verification
 # key. Pause so the user can mint one at os.agno.com and have the first
 # deploy come up serving.
 if [[ -n "$AUTH_REQUIRES_JWT" && -z "$JWT_VERIFICATION_KEY" && -z "$JWT_JWKS_FILE" && -t 0 ]]; then
     echo ""
-    echo -e "${ORANGE}▸${NC} ${BOLD}JWT_VERIFICATION_KEY not set${NC} — AgentOS won't serve production traffic without auth."
+    echo -e "${ORANGE}▸${NC} ${BOLD}JWT_VERIFICATION_KEY not set${NC} — AgentOS won't start in production without auth."
     echo -e "  1. Open ${BOLD}https://os.agno.com${NC} -> Connect OS -> Live -> enter ${INGRESS_HOST:+https://}${INGRESS_HOST:-your AgentOS URL}"
     echo -e "  2. Name it ${BOLD}Live AgentOS${NC}"
     echo -e "  3. Note: Live AgentOS Connections are a paid feature; use ${BOLD}PLATFORM30${NC} to get 1 month off"
@@ -277,7 +305,7 @@ if [[ -n "$AUTH_REQUIRES_JWT" && -z "$JWT_VERIFICATION_KEY" && -z "$JWT_JWKS_FIL
             echo -e "${DIM}  Saved JWT_VERIFICATION_KEY to ${ENV_FILE}${NC}"
         else
             echo -e "${BOLD}Warning:${NC} couldn't parse the pasted JWT_VERIFICATION_KEY."
-            echo -e "${DIM}  Save it to ${ENV_FILE:-.env.production} and run ./scripts/k8s/env-sync.sh if auth is still missing.${NC}"
+            echo -e "${DIM}  Save it to ${ENV_FILE:-.env.production} and run $(env_sync_cmd) if auth is still missing.${NC}"
         fi
     else
         [[ -f .env.production ]] && ENV_FILE=".env.production"
@@ -286,10 +314,28 @@ if [[ -n "$AUTH_REQUIRES_JWT" && -z "$JWT_VERIFICATION_KEY" && -z "$JWT_JWKS_FIL
     [[ -n "$ENV_FILE" ]] && load_env_file "$ENV_FILE"
 fi
 
+# JWT_JWKS_FILE satisfies production auth above, but only if the pod can
+# actually read the file. The chart ships its CONTENT and mounts it — a
+# dangling local path must fail here, not deploy a release agno refuses to
+# start. (File baked into a custom image instead? Set the chart value
+# jwtJwksFile directly via helm — this guard only covers the env-file flow.)
+JWKS_LOCAL=""
+if [[ -n "$JWT_JWKS_FILE" ]]; then
+    JWKS_LOCAL="$(resolve_jwks_local_file "$JWT_JWKS_FILE")" || true
+    if [[ -z "$JWKS_LOCAL" || ! -r "$JWKS_LOCAL" || ! -s "$JWKS_LOCAL" ]]; then
+        echo "JWT_JWKS_FILE=${JWT_JWKS_FILE} doesn't resolve to a readable, non-empty local file"
+        echo "(tried the path as-is, then /app/… against the repo root). Fix the path or unset it."
+        exit 1
+    fi
+fi
+
+JWT_KEY_MISSING=""
 if [[ -n "$AUTH_REQUIRES_JWT" && -z "$JWT_VERIFICATION_KEY" && -z "$JWT_JWKS_FILE" ]]; then
+    JWT_KEY_MISSING=1
     echo ""
-    echo -e "${DIM}Deploying without JWT auth config — the app will refuse traffic until${NC}"
-    echo -e "${DIM}you add JWT_VERIFICATION_KEY to ${ENV_FILE:-.env.production} and run ./scripts/k8s/env-sync.sh.${NC}"
+    echo -e "${DIM}Deploying without JWT auth config — the app exits at startup, so the pod${NC}"
+    echo -e "${DIM}will crash-loop until you add JWT_VERIFICATION_KEY to ${ENV_FILE:-.env.production}${NC}"
+    echo -e "${DIM}and run $(env_sync_cmd). Skipping the readiness wait.${NC}"
 fi
 
 # Secrets ride a values file (0600, deleted on exit), not --set args.
@@ -304,8 +350,9 @@ trap 'rm -f "$VALUES_FILE"' EXIT
     if [[ -n "$AGENTOS_URL" ]]; then
         printf 'agentosUrl: %s\n' "$(yaml_sq "$AGENTOS_URL")"
     fi
-    if [[ -n "$JWT_JWKS_FILE" ]]; then
-        printf 'jwtJwksFile: %s\n' "$(yaml_sq "$JWT_JWKS_FILE")"
+    if [[ -n "$JWKS_LOCAL" ]]; then
+        # The content rides secrets.jwtJwks (below); the pod reads the mount.
+        printf 'jwtJwksFile: /etc/agentos/jwks.json\n'
     fi
     if [[ -n "$IMAGE_REPOSITORY" || -n "$IMAGE_TAG" || -n "$IMAGE_PULL_POLICY" ]]; then
         printf 'image:\n'
@@ -323,6 +370,10 @@ trap 'rm -f "$VALUES_FILE"' EXIT
         printf '  jwtVerificationKey: |-\n'
         printf '%s\n' "$JWT_VERIFICATION_KEY" | sed 's/^/    /'
     fi
+    if [[ -n "$JWKS_LOCAL" ]]; then
+        printf '  jwtJwks: |-\n'
+        printf '%s\n' "$(cat "$JWKS_LOCAL")" | sed 's/^/    /'
+    fi
     if [[ -n "$MCP_CONNECT_SECRET" ]]; then printf '  mcpConnectSecret: %s\n' "$(yaml_sq "$MCP_CONNECT_SECRET")"; fi
     if [[ -n "$AGENTOS_MCP_SIGNING_KEY" ]]; then printf '  agentosMcpSigningKey: %s\n' "$(yaml_sq "$AGENTOS_MCP_SIGNING_KEY")"; fi
     if [[ -n "$PARALLEL_API_KEY" ]]; then printf '  parallelApiKey: %s\n' "$(yaml_sq "$PARALLEL_API_KEY")"; fi
@@ -336,17 +387,36 @@ echo -e "${ORANGE}▸${NC} ${BOLD}Installing ${RELEASE} into ${NAMESPACE}${NC}"
 echo ""
 echo -e "${DIM}> helm upgrade --install ${RELEASE} charts/agentos -n ${NAMESPACE}${NC}"
 echo ""
-helm upgrade --install "$RELEASE" charts/agentos \
-    --namespace "$NAMESPACE" --create-namespace \
-    -f "$VALUES_FILE" \
-    --wait --timeout 15m
+# Without a JWT key the app exits at startup and the pod can never turn
+# Ready, so --wait would block for the full 15m and then mark the release
+# failed. Install without waiting instead — env-sync.sh rolls the pod and
+# waits once the key lands.
+if [[ -n "$JWT_KEY_MISSING" ]]; then
+    helm upgrade --install "$RELEASE" charts/agentos \
+        --namespace "$NAMESPACE" --create-namespace \
+        -f "$VALUES_FILE"
+else
+    helm upgrade --install "$RELEASE" charts/agentos \
+        --namespace "$NAMESPACE" --create-namespace \
+        -f "$VALUES_FILE" \
+        --wait --timeout 15m
+fi
 
 # helm's fullname: the release name when it already contains the chart name.
 FULLNAME="$RELEASE"
 [[ "$RELEASE" != *agentos* ]] && FULLNAME="${RELEASE}-agentos"
 
 echo ""
-echo -e "${BOLD}Done.${NC}"
+if [[ -n "$JWT_KEY_MISSING" ]]; then
+    echo -e "${BOLD}Installed — action needed.${NC} No JWT key: the app pod crash-loops until you add"
+    echo -e "one (it exits at startup rather than serve production traffic unauthenticated)."
+    echo -e "  1. Mint the key at ${BOLD}https://os.agno.com${NC} -> Connect OS -> Live (README \"Production Auth\")"
+    echo -e "  2. Add JWT_VERIFICATION_KEY to ${ENV_FILE:-.env.production}"
+    echo -e "  3. Run ${BOLD}$(env_sync_cmd)${NC} — it updates the Secret, rolls the pod, and waits"
+    echo -e "${DIM}Watch pods (Error/CrashLoopBackOff until then):  kubectl get pods -n ${NAMESPACE}${NC}"
+else
+    echo -e "${BOLD}Done.${NC}"
+fi
 if [[ -n "$INGRESS_HOST" ]]; then
     echo -e "${DIM}URL:            https://${INGRESS_HOST}  (docs at /docs, MCP at /mcp)${NC}"
 else
@@ -354,7 +424,7 @@ else
     echo -e "${DIM}                then http://localhost:8000/docs${NC}"
 fi
 echo -e "${DIM}Logs:           kubectl logs deploy/${FULLNAME} -n ${NAMESPACE} -f${NC}"
-echo -e "${DIM}Sync env vars:  ./scripts/k8s/env-sync.sh${NC}"
+echo -e "${DIM}Sync env vars:  $(env_sync_cmd)${NC}"
 [[ -n "$INGRESS_HOST" ]] && echo -e "${DIM}Connect apps:   uvx agno connect --url https://${INGRESS_HOST}${NC}"
 if [[ -n "$INGRESS_HOST" && -n "$MCP_CONNECT_SECRET" ]]; then
     echo -e "${DIM}Chat apps:      add https://${INGRESS_HOST}/mcp as a custom connector in claude.ai / ChatGPT${NC}"
