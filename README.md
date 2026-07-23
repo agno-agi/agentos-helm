@@ -4,7 +4,7 @@ AgentOS turns your agents into a production API. One AI backend that serves ever
 
 1. **Your product.** Call the REST API from your app: run agents, stream responses, and manage sessions, memory, and knowledge.
 2. **AgentOS UI.** Chat with agents, build new ones, and inspect sessions, traces, memory, and evals from the AgentOS UI at [os.agno.com](https://os.agno.com?utm_source=github&utm_medium=example-repo&utm_campaign=agentos-helm&utm_content=agentos-helm&utm_term=kubernetes).
-3. **Coding agents.** Manage the full agent development lifecycle (create, extend, improve, eval and review) using the skills in [`.agents/skills/`](.agents/skills/).
+3. **Coding agents.** Manage the full agent development lifecycle (create, extend, improve, eval, review — and deploy) using the skills in [`.agents/skills/`](.agents/skills/).
 4. **AI apps.** MCP clients like Claude and ChatGPT can use your agents through the MCP server at `/mcp`.
 5. **Chat interfaces.** Chat with your agents from Slack, WhatsApp, Telegram, and Discord.
 
@@ -70,7 +70,7 @@ Click **Chat** under **Platform Manager** and ask: "How healthy is the platform?
 
 ## Run in production
 
-You can run the platform anywhere that supports containerized images. This template deploys to any Kubernetes cluster — cloud-managed (EKS, GKE, AKS) or your own — with the Helm chart in [`charts/agentos`](charts/agentos) and a single script.
+You can run the platform anywhere that supports containerized images. This template deploys to any Kubernetes cluster — cloud-managed (EKS, GKE, AKS) or your own — with the Helm chart in [`charts/agentos`](charts/agentos) and a single script; the [`/deploy-platform`](.agents/skills/deploy-platform/SKILL.md) coding-agent skill guides you through it.
 
 > **Prerequisites:** [kubectl](https://kubernetes.io/docs/tasks/tools/) pointed at your cluster, [Helm](https://helm.sh/docs/intro/install/) 3+, and a container registry the cluster can pull from.
 
@@ -119,12 +119,10 @@ Token-Based Auth gives you three things:
 
 During `./scripts/k8s/up.sh`, the script pauses so you can mint the key before the app starts.
 
-1. Open [os.agno.com](https://os.agno.com?utm_source=github&utm_medium=example-repo&utm_campaign=agentos-helm&utm_content=agentos-helm&utm_term=kubernetes), click **Connect OS** → **Live**, enter your AgentOS URL (your ingress host — or a tunnel while testing), and connect.
-2. Name it **Live AgentOS**.
-3. Go to **Settings** → **OS & Security**.
-4. Turn **Token-Based Authorization (JWT)** on.
-5. Copy the public key.
-6. Paste the full public key into the `up.sh` prompt. The script saves it into your env file for future syncs:
+1. Open [os.agno.com](https://os.agno.com?utm_source=github&utm_medium=example-repo&utm_campaign=agentos-helm&utm_content=agentos-helm&utm_term=kubernetes), click **Connect OS** → **Live**, and enter your AgentOS URL (your ingress host — or a tunnel while testing).
+2. Name it **Live AgentOS**, flip **Token-Based Authorization (JWT)** on — the toggle is right on the connect panel — and connect. The UI generates your public key. (Already connected without it? **Settings** → **OS & Security** → **Token-Based Authorization (JWT)**.)
+3. Copy the public key.
+4. Paste the full public key into the `up.sh` prompt. The script saves it into your env file for future syncs:
 
 ```sh
 JWT_VERIFICATION_KEY="-----BEGIN PUBLIC KEY-----
@@ -178,7 +176,7 @@ To re-sync environment variables, run the following command:
 ./scripts/k8s/env-sync.sh
 ```
 
-Changed secrets roll the pod automatically (the deployment carries a secret-checksum annotation). The script syncs the connection and secret keys (including `JWT_JWKS_FILE`); other knobs (`ENABLE_DEPLOY_CHECK`, `ENABLE_SCHEDULED_EVALS`, `EVALS_*`) are chart values — set them via `extraEnv` and `helm upgrade`.
+Changed secrets roll the pod automatically (the deployment carries a secret-checksum annotation). The script syncs the connection and secret keys (including `JWT_JWKS_FILE`); other knobs (`ENABLE_DEPLOY_CHECK`, `EVALS_*`) are chart values — set them via `extraEnv` and `helm upgrade`.
 
 ### 9. Tear down
 
@@ -277,7 +275,6 @@ can you access my agentos mcp?
 | `MCP_CONNECT_SECRET` | no | none | If set (≥16 chars, e.g. `openssl rand -base64 32`), `/mcp` becomes its own OAuth 2.1 authorization server so claude.ai and ChatGPT (web) can connect; connecting asks for this secret on a consent page. Requires a public `AGENTOS_URL`. `scripts/k8s/up.sh` auto-generates it when the deploy has a public URL (`INGRESS_HOST` or `AGENTOS_URL`). PAT and JWT bearers keep working alongside. |
 | `AGENTOS_MCP_SIGNING_KEY` | no | none | Optional high-entropy signing-key material (≥32 chars) for OAuth tokens. Unset, a strong key is generated and persisted in the database. Rotating it invalidates outstanding tokens. |
 | `ENABLE_DEPLOY_CHECK` | no | `True` | The reference deployment-check cron runs daily by default. Set `False` to disable; the workflow is runnable on demand regardless. |
-| `ENABLE_SCHEDULED_EVALS` | no | `False` | If `True`, schedules the run-evals workflow daily. Off by default because it uses model calls. |
 | `EVALS_TAG` | no | `smoke` | Eval tag run by the run-evals workflow. |
 | `EVALS_CASE_TIMEOUT_SECONDS` | no | `90` | Default per-case timeout for run-evals runs; applies only to cases that don't set their own `timeout_seconds`. |
 | `EVALS_SUITE_TIMEOUT_SECONDS` | no | `900` | Whole-suite timeout for run-evals runs; per-case timeouts are the granular limit. The default bounds the `smoke` tag's worst case (incl. builder-case teardown). |

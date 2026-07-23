@@ -59,7 +59,7 @@ secrets:
   slackSigningSecret: ""
 
 # Extra environment variables for the api container (e.g. ENABLE_DEPLOY_CHECK,
-# ENABLE_SCHEDULED_EVALS, EVALS_TAG — see the README env table).
+# EVALS_TAG — see the README env table).
 extraEnv: []
 
 service:
