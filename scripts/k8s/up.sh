@@ -288,7 +288,7 @@ fi
 
 if [[ -n "$AUTH_REQUIRES_JWT" && -z "$JWT_VERIFICATION_KEY" && -z "$JWT_JWKS_FILE" ]]; then
     echo ""
-    echo -e "${DIM}Deploying without JWT auth config — the app will refuse traffic until${NC}"
+    echo -e "${DIM}Deploying without JWT auth config — the container exits on boot and the pod never passes its startup probe until${NC}"
     echo -e "${DIM}you add JWT_VERIFICATION_KEY to ${ENV_FILE:-.env.production} and run ./scripts/k8s/env-sync.sh.${NC}"
 fi
 
