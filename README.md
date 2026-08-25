@@ -191,7 +191,7 @@ To re-sync environment variables, run the following command:
 ./scripts/k8s/env-sync.sh
 ```
 
-Changed secrets roll the pod automatically (the deployment carries a secret-checksum annotation). The script syncs the connection and secret keys (including `JWT_JWKS_FILE`); other knobs (`ENABLE_DEPLOY_CHECK`, `EVALS_*`) are chart values — set them via `extraEnv` and `helm upgrade`.
+Changed secrets roll the pod automatically (the deployment carries a secret-checksum annotation). The script syncs the connection and secret keys (including `JWT_JWKS_FILE`), and a line you remove from the env file is removed from the release on the next sync (`DB_PASS` excepted — the volume remembers it); other knobs (`ENABLE_DEPLOY_CHECK`, `EVALS_*`) are chart values — set them via `extraEnv` and `helm upgrade`.
 
 ### 9. Tear down
 

@@ -9,7 +9,9 @@
 #      ./scripts/k8s/env-sync.sh .env        # syncs .env instead
 #
 #    Re-renders the release's secret values from the env file and helm-
-#    upgrades with --reuse-values, so only what you changed moves. The
+#    upgrades with --reuse-values. Every key the env file can carry is
+#    written on each sync, so a line you removed leaves the release too
+#    (DB_PASS excepted — the volume remembers it). The
 #    deployment's secret-checksum annotation rolls the pod automatically
 #    when secret contents change. Multi-line values (PEM-formatted
 #    JWT_VERIFICATION_KEY) are handled correctly; a set JWT_JWKS_FILE
@@ -143,24 +145,37 @@ chmod 600 "$VALUES_FILE"
 trap 'rm -f "$VALUES_FILE"' EXIT
 
 {
-    if [[ -n "$RUNTIME_ENV" ]]; then printf 'runtimeEnv: %s\n' "$(yaml_sq "$RUNTIME_ENV")"; fi
-    if [[ -n "$AGENTOS_URL" ]]; then printf 'agentosUrl: %s\n' "$(yaml_sq "$AGENTOS_URL")"; fi
-    if [[ -n "$JWKS_LOCAL" ]]; then printf 'jwtJwksFile: /etc/agentos/jwks.json\n'; fi
+    # Every key the env file can carry is written on every sync, empty when
+    # the line is gone: the upgrade runs with --reuse-values, which merges and
+    # never deletes, so a removed line would otherwise stay in the release (a
+    # stale JWT_JWKS_FILE keeps crashing the pod after the PEM lands). The
+    # chart treats an empty value as unset. DB_PASS is the one exception.
+    printf 'runtimeEnv: %s\n' "$(yaml_sq "${RUNTIME_ENV:-prd}")"
+    printf 'agentosUrl: %s\n' "$(yaml_sq "$AGENTOS_URL")"
+    if [[ -n "$JWKS_LOCAL" ]]; then
+        printf 'jwtJwksFile: /etc/agentos/jwks.json\n'
+    else
+        printf "jwtJwksFile: ''\n"
+    fi
     printf 'secrets:\n'
     printf '  openaiApiKey: %s\n' "$(yaml_sq "$OPENAI_API_KEY")"
     if [[ -n "$JWT_VERIFICATION_KEY" ]]; then
         printf '  jwtVerificationKey: |-\n'
         printf '%s\n' "$JWT_VERIFICATION_KEY" | sed 's/^/    /'
+    else
+        printf "  jwtVerificationKey: ''\n"
     fi
     if [[ -n "$JWKS_LOCAL" ]]; then
         printf '  jwtJwks: |-\n'
         printf '%s\n' "$(cat "$JWKS_LOCAL")" | sed 's/^/    /'
+    else
+        printf "  jwtJwks: ''\n"
     fi
-    if [[ -n "$MCP_CONNECT_SECRET" ]]; then printf '  mcpConnectSecret: %s\n' "$(yaml_sq "$MCP_CONNECT_SECRET")"; fi
-    if [[ -n "$AGENTOS_MCP_SIGNING_KEY" ]]; then printf '  agentosMcpSigningKey: %s\n' "$(yaml_sq "$AGENTOS_MCP_SIGNING_KEY")"; fi
-    if [[ -n "$PARALLEL_API_KEY" ]]; then printf '  parallelApiKey: %s\n' "$(yaml_sq "$PARALLEL_API_KEY")"; fi
-    if [[ -n "$SLACK_BOT_TOKEN" ]]; then printf '  slackBotToken: %s\n' "$(yaml_sq "$SLACK_BOT_TOKEN")"; fi
-    if [[ -n "$SLACK_SIGNING_SECRET" ]]; then printf '  slackSigningSecret: %s\n' "$(yaml_sq "$SLACK_SIGNING_SECRET")"; fi
+    printf '  mcpConnectSecret: %s\n' "$(yaml_sq "$MCP_CONNECT_SECRET")"
+    printf '  agentosMcpSigningKey: %s\n' "$(yaml_sq "$AGENTOS_MCP_SIGNING_KEY")"
+    printf '  parallelApiKey: %s\n' "$(yaml_sq "$PARALLEL_API_KEY")"
+    printf '  slackBotToken: %s\n' "$(yaml_sq "$SLACK_BOT_TOKEN")"
+    printf '  slackSigningSecret: %s\n' "$(yaml_sq "$SLACK_SIGNING_SECRET")"
     # DB_PASS only when the env file carries one — otherwise the release
     # keeps its current password (never regenerate against a live volume).
     if [[ -n "$DB_PASS" ]]; then
