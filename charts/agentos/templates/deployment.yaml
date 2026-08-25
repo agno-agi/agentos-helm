@@ -43,9 +43,12 @@ spec:
               value: "True"
             - name: AGENTOS_URL
               value: {{ include "agentos.agentosUrl" . | quote }}
-            {{- with .Values.jwtJwksFile }}
+            {{- /* JWKS content is mounted at /etc/agentos/jwks.json; unless a
+                   path is given, point agno at that mount so content alone
+                   is a complete configuration. */}}
+            {{- if or .Values.jwtJwksFile .Values.secrets.jwtJwks }}
             - name: JWT_JWKS_FILE
-              value: {{ . | quote }}
+              value: {{ .Values.jwtJwksFile | default "/etc/agentos/jwks.json" | quote }}
             {{- end }}
             - name: DB_HOST
               value: {{ include "agentos.dbHost" . | quote }}
