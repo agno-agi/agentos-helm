@@ -51,15 +51,22 @@ if ! helm status "$RELEASE" -n "$NAMESPACE" &> /dev/null; then
     exit 1
 fi
 
-# `helm upgrade` (no --install) needs a deployed revision to upgrade from —
-# against a release stuck in failed/pending-* (e.g. an interrupted install)
-# it errors "has no deployed releases". Catch that early and point at the
-# fix. Blocks only on a positively-detected non-deployed status.
+# `helm upgrade` (no --install) needs a deployed revision to upgrade from.
+# A release whose latest revision failed can still be upgraded when an
+# earlier revision was deployed (helm upgrades from that one); only a
+# release that never deployed — an interrupted or keyless first install —
+# has nothing to upgrade from, and helm would burn its whole --wait on it.
+# Block on that case alone. Fail-open: an unrecognized history shape falls
+# through to helm.
 RELEASE_STATUS="$(helm status "$RELEASE" -n "$NAMESPACE" -o json 2> /dev/null | grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1 | cut -d '"' -f 4)"
 if [[ -n "$RELEASE_STATUS" && "$RELEASE_STATUS" != "deployed" ]]; then
-    echo "Release '${RELEASE}' is in status '${RELEASE_STATUS}' — helm can only upgrade a deployed release."
-    echo "Re-run ./scripts/k8s/up.sh to repair it (a stuck pending-* release needs 'helm rollback' or './scripts/k8s/down.sh' first)."
-    exit 1
+    # grep -c exits 1 on a zero count; keep set -e from ending the script there.
+    EVER_DEPLOYED="$(helm history "$RELEASE" -n "$NAMESPACE" -o json 2> /dev/null | grep -cE '"status"[[:space:]]*:[[:space:]]*"(deployed|superseded)"' || true)"
+    if [[ "$EVER_DEPLOYED" == "0" ]]; then
+        echo "Release '${RELEASE}' is in status '${RELEASE_STATUS}' and no revision has ever deployed — nothing to upgrade from."
+        echo "Re-run ./scripts/k8s/up.sh to repair it (a stuck pending-* release needs 'helm rollback' or './scripts/k8s/down.sh' first)."
+        exit 1
+    fi
 fi
 
 # Parse the env file, treating PEM blocks (and other multiline values) as a
