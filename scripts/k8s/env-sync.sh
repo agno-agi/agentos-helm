@@ -145,6 +145,10 @@ echo ""
 echo -e "${DIM}> ${ENV_FILE} -> release ${RELEASE} (namespace ${NAMESPACE})${NC}"
 echo ""
 
+# The JWKS path the release carries today, to tell a scripts-managed mount
+# (/etc/agentos/jwks.json) from a path baked into a custom image.
+CURRENT_JWKS_FILE="$(helm get values "$RELEASE" -n "$NAMESPACE" -o json 2> /dev/null | grep -o '"jwtJwksFile"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1 | cut -d '"' -f 4)"
+
 mkdir -p tmp
 VALUES_FILE="tmp/values-secrets.yaml"
 : > "$VALUES_FILE"
@@ -161,7 +165,9 @@ trap 'rm -f "$VALUES_FILE"' EXIT
     printf 'agentosUrl: %s\n' "$(yaml_sq "$AGENTOS_URL")"
     if [[ -n "$JWKS_LOCAL" ]]; then
         printf 'jwtJwksFile: /etc/agentos/jwks.json\n'
-    else
+    elif [[ -z "$CURRENT_JWKS_FILE" || "$CURRENT_JWKS_FILE" == "/etc/agentos/jwks.json" ]]; then
+        # Only clear a path the scripts put there. A different path means a
+        # file baked into a custom image, set directly via helm — leave it.
         printf "jwtJwksFile: ''\n"
     fi
     printf 'secrets:\n'
@@ -175,7 +181,7 @@ trap 'rm -f "$VALUES_FILE"' EXIT
     if [[ -n "$JWKS_LOCAL" ]]; then
         printf '  jwtJwks: |-\n'
         printf '%s\n' "$(cat "$JWKS_LOCAL")" | sed 's/^/    /'
-    else
+    elif [[ -z "$CURRENT_JWKS_FILE" || "$CURRENT_JWKS_FILE" == "/etc/agentos/jwks.json" ]]; then
         printf "  jwtJwks: ''\n"
     fi
     printf '  mcpConnectSecret: %s\n' "$(yaml_sq "$MCP_CONNECT_SECRET")"
