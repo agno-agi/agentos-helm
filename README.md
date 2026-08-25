@@ -124,7 +124,7 @@ Bringing your own Postgres instead? It must have the [pgvector](https://github.c
 
 ### 4. Production Auth
 
-Token-Based Authorization is on by default. Without a `JWT_VERIFICATION_KEY` or `JWT_JWKS_FILE`, the app refuses to serve traffic in production. The platform's job is to keep your data private, so the safe default is "refuse to start" without an authentication token.
+Token-Based Authorization is on by default. Without a `JWT_VERIFICATION_KEY` or `JWT_JWKS_FILE`, the app refuses to start in production — the process exits at startup, so the pod crash-loops until a key arrives. The platform's job is to keep your data private, so the safe default is "refuse to start" without an authentication token.
 
 Token-Based Auth gives you three things:
 
@@ -147,7 +147,7 @@ MIIBIjANBgkq...
 
 > **Heads up.** Live AgentOS Connections are a paid feature. Use `PLATFORM30` to get 1 month off. We are working on a free trial so you don't have to pay to try.
 
-If you run non-interactively or skip the prompt, you can sync environment variables later with `./scripts/k8s/env-sync.sh`.
+If you run non-interactively or skip the prompt, `up.sh` still installs the release but skips the readiness wait — the keyless app exits at startup, so the pod crash-loops until you add the key to your env file and run `./scripts/k8s/env-sync.sh`, which rolls the pod and waits for it to come up.
 
 ### 5. Register your production AgentOS to MCP clients
 
@@ -191,7 +191,7 @@ To re-sync environment variables, run the following command:
 ./scripts/k8s/env-sync.sh
 ```
 
-Changed secrets roll the pod automatically (the deployment carries a secret-checksum annotation). The script syncs the connection and secret keys (including `JWT_JWKS_FILE`); other knobs (`ENABLE_DEPLOY_CHECK`, `EVALS_*`) are chart values — set them via `extraEnv` and `helm upgrade`.
+Changed secrets roll the pod automatically (the deployment carries a secret-checksum annotation). The script syncs the connection and secret keys (including `JWT_JWKS_FILE`), and a line you remove from the env file is removed from the release on the next sync (`DB_PASS` excepted — the volume remembers it); other knobs (`ENABLE_DEPLOY_CHECK`, `EVALS_*`) are chart values — set them via `extraEnv` and `helm upgrade`.
 
 ### 9. Tear down
 
@@ -285,7 +285,7 @@ can you access my agentos mcp?
 | `OPENAI_API_KEY` | yes | none | OpenAI key for models and embeddings. |
 | `RUNTIME_ENV` | no | `prd` | `dev` disables JWT. Compose sets this to `dev` for local — never put `dev` in an env file that env-sync.sh pushes to a real cluster, or production serves unauthenticated. |
 | `JWT_VERIFICATION_KEY` | prd | none | Public key from os.agno.com. Required when `RUNTIME_ENV=prd`, unless `JWT_JWKS_FILE` is set. |
-| `JWT_JWKS_FILE` | prd | none | Path to a JWKS file; alternative to `JWT_VERIFICATION_KEY` for production JWT verification. |
+| `JWT_JWKS_FILE` | prd | none | Path to a JWKS file; alternative to `JWT_VERIFICATION_KEY` for production JWT verification. The k8s scripts read the file locally (an `/app/…` path also resolves against the repo root, mirroring compose's bind mount), ship its content as `secrets.jwtJwks`, and the chart mounts it at `/etc/agentos/jwks.json`, repointing `JWT_JWKS_FILE` there. |
 | `AGENTOS_URL` | no | `http://127.0.0.1:8000` | Scheduler base URL. The chart resolves it automatically (explicit value > ingress URL > in-cluster service DNS); set by hand only for a custom domain or tunnel. Also the public origin OAuth metadata derives from when `MCP_CONNECT_SECRET` is set. |
 | `MCP_CONNECT_SECRET` | no | none | If set (≥16 chars, e.g. `openssl rand -base64 32`), `/mcp` becomes its own OAuth 2.1 authorization server so claude.ai and ChatGPT (web) can connect; connecting asks for this secret on a consent page. Requires a public `AGENTOS_URL`. `scripts/k8s/up.sh` auto-generates it when the deploy has a public URL (`INGRESS_HOST` or `AGENTOS_URL`). PAT and JWT bearers keep working alongside. |
 | `AGENTOS_MCP_SIGNING_KEY` | no | none | Optional high-entropy signing-key material (≥32 chars) for OAuth tokens. Unset, a strong key is generated and persisted in the database. Rotating it invalidates outstanding tokens. |

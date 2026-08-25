@@ -43,9 +43,12 @@ spec:
               value: "True"
             - name: AGENTOS_URL
               value: {{ include "agentos.agentosUrl" . | quote }}
-            {{- with .Values.jwtJwksFile }}
+            {{- /* JWKS content is mounted at /etc/agentos/jwks.json; unless a
+                   path is given, point agno at that mount so content alone
+                   is a complete configuration. */}}
+            {{- if or .Values.jwtJwksFile .Values.secrets.jwtJwks }}
             - name: JWT_JWKS_FILE
-              value: {{ . | quote }}
+              value: {{ .Values.jwtJwksFile | default "/etc/agentos/jwks.json" | quote }}
             {{- end }}
             - name: DB_HOST
               value: {{ include "agentos.dbHost" . | quote }}
@@ -127,6 +130,21 @@ spec:
             periodSeconds: 20
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.secrets.jwtJwks }}
+          volumeMounts:
+            - name: jwks
+              mountPath: /etc/agentos
+              readOnly: true
+          {{- end }}
+      {{- if .Values.secrets.jwtJwks }}
+      volumes:
+        - name: jwks
+          secret:
+            secretName: {{ include "agentos.secretName" . }}
+            items:
+              - key: JWT_JWKS
+                path: jwks.json
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

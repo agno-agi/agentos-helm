@@ -25,7 +25,9 @@ fullnameOverride: ""
 replicaCount: 1
 
 # "dev" disables JWT auth — local clusters only. Anything else (default
-# "prd") requires secrets.jwtVerificationKey or the app refuses traffic.
+# "prd") requires secrets.jwtVerificationKey or a JWKS (jwtJwksFile /
+# secrets.jwtJwks) or the app exits at startup (the pod crash-loops until
+# a key arrives).
 runtimeEnv: prd
 
 # Scheduler base URL — cron triggers reach AgentOS over this. Empty picks a
@@ -35,17 +37,27 @@ runtimeEnv: prd
 agentosUrl: ""
 
 # Path to a JWKS file inside the container — alternative to secrets.jwtVerificationKey for prd JWT verification.
+# The file must actually exist in the pod at that path: either baked into a
+# custom image, or shipped portably via secrets.jwtJwks (mounted at
+# /etc/agentos/jwks.json — point this value there).
 jwtJwksFile: ""
 
 secrets:
   create: true
   # Name of a pre-created Secret to use instead. Expected keys:
-  # OPENAI_API_KEY (required), JWT_VERIFICATION_KEY, MCP_CONNECT_SECRET,
-  # AGENTOS_MCP_SIGNING_KEY, PARALLEL_API_KEY, SLACK_BOT_TOKEN,
-  # SLACK_SIGNING_SECRET (all optional).
+  # OPENAI_API_KEY (required), JWT_VERIFICATION_KEY, JWT_JWKS,
+  # MCP_CONNECT_SECRET, AGENTOS_MCP_SIGNING_KEY, PARALLEL_API_KEY,
+  # SLACK_BOT_TOKEN, SLACK_SIGNING_SECRET (all optional).
   existingSecret: ""
   openaiApiKey: ""
   jwtVerificationKey: ""
+  # JWKS JSON content (the document itself, not a path). When set, it lands in
+  # the app Secret as JWT_JWKS and is mounted read-only at
+  # /etc/agentos/jwks.json — set jwtJwksFile to that path so agno reads it
+  # (up.sh/env-sync.sh do both automatically from the env file's
+  # JWT_JWKS_FILE). With existingSecret, keep the JWKS in the Secret's
+  # JWT_JWKS key and set this to any non-empty value to enable the mount.
+  jwtJwks: ""
   # MCP OAuth consent secret (≥16 chars) — set to turn /mcp into its own
   # OAuth 2.1 authorization server so claude.ai / ChatGPT (web) can connect.
   # scripts/k8s/up.sh generates one into your env file when the deploy has a

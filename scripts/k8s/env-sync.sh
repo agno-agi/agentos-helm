@@ -9,10 +9,14 @@
 #      ./scripts/k8s/env-sync.sh .env        # syncs .env instead
 #
 #    Re-renders the release's secret values from the env file and helm-
-#    upgrades with --reuse-values, so only what you changed moves. The
+#    upgrades with --reuse-values. Every key the env file can carry is
+#    written on each sync, so a line you removed leaves the release too
+#    (DB_PASS excepted — the volume remembers it). The
 #    deployment's secret-checksum annotation rolls the pod automatically
 #    when secret contents change. Multi-line values (PEM-formatted
-#    JWT_VERIFICATION_KEY) are handled correctly.
+#    JWT_VERIFICATION_KEY) are handled correctly; a set JWT_JWKS_FILE
+#    ships the local file's content as secrets.jwtJwks and repoints the
+#    pod at the mount.
 #
 #    Overrides (env vars): AGENTOS_NAMESPACE (agentos), AGENTOS_RELEASE (agentos)
 #
@@ -45,6 +49,24 @@ RELEASE="${AGENTOS_RELEASE:-agentos}"
 if ! helm status "$RELEASE" -n "$NAMESPACE" &> /dev/null; then
     echo "Release '${RELEASE}' not found in namespace '${NAMESPACE}'. Run ./scripts/k8s/up.sh first."
     exit 1
+fi
+
+# `helm upgrade` (no --install) needs a deployed revision to upgrade from.
+# A release whose latest revision failed can still be upgraded when an
+# earlier revision was deployed (helm upgrades from that one); only a
+# release that never deployed — an interrupted or keyless first install —
+# has nothing to upgrade from, and helm would burn its whole --wait on it.
+# Block on that case alone. Fail-open: an unrecognized history shape falls
+# through to helm.
+RELEASE_STATUS="$(helm status "$RELEASE" -n "$NAMESPACE" -o json 2> /dev/null | grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1 | cut -d '"' -f 4)"
+if [[ -n "$RELEASE_STATUS" && "$RELEASE_STATUS" != "deployed" ]]; then
+    # grep -c exits 1 on a zero count; keep set -e from ending the script there.
+    EVER_DEPLOYED="$(helm history "$RELEASE" -n "$NAMESPACE" -o json 2> /dev/null | grep -cE '"status"[[:space:]]*:[[:space:]]*"(deployed|superseded)"' || true)"
+    if [[ "$EVER_DEPLOYED" == "0" ]]; then
+        echo "Release '${RELEASE}' is in status '${RELEASE_STATUS}' and no revision has ever deployed — nothing to upgrade from."
+        echo "Re-run ./scripts/k8s/up.sh to repair it (a stuck pending-* release needs 'helm rollback' or './scripts/k8s/down.sh' first)."
+        exit 1
+    fi
 fi
 
 # Parse the env file, treating PEM blocks (and other multiline values) as a
@@ -85,11 +107,36 @@ yaml_sq() {
     printf "'%s'" "$v"
 }
 
+# Resolve the local file behind JWT_JWKS_FILE (a container path in the env
+# file) — same resolver as up.sh.
+resolve_jwks_local_file() {
+    local path="$1"
+    if [[ -f "$path" ]]; then
+        printf '%s' "$path"
+    elif [[ "$path" == /app/* && -f "${path#/app/}" ]]; then
+        printf '%s' "${path#/app/}"
+    else
+        return 1
+    fi
+}
+
 load_env_file "$ENV_FILE"
 
 if [[ -z "$OPENAI_API_KEY" ]]; then
     echo "OPENAI_API_KEY not set in ${ENV_FILE} — refusing to sync an empty key."
     exit 1
+fi
+
+# The chart ships JWKS content and mounts it in-cluster — a dangling
+# JWT_JWKS_FILE must fail here, not sync a release agno refuses to start.
+JWKS_LOCAL=""
+if [[ -n "$JWT_JWKS_FILE" ]]; then
+    JWKS_LOCAL="$(resolve_jwks_local_file "$JWT_JWKS_FILE")" || true
+    if [[ -z "$JWKS_LOCAL" || ! -r "$JWKS_LOCAL" || ! -s "$JWKS_LOCAL" ]]; then
+        echo "JWT_JWKS_FILE=${JWT_JWKS_FILE} doesn't resolve to a readable, non-empty local file"
+        echo "(tried the path as-is, then /app/… against the repo root). Fix the path or unset it."
+        exit 1
+    fi
 fi
 
 echo ""
@@ -98,6 +145,10 @@ echo ""
 echo -e "${DIM}> ${ENV_FILE} -> release ${RELEASE} (namespace ${NAMESPACE})${NC}"
 echo ""
 
+# The JWKS path the release carries today, to tell a scripts-managed mount
+# (/etc/agentos/jwks.json) from a path baked into a custom image.
+CURRENT_JWKS_FILE="$(helm get values "$RELEASE" -n "$NAMESPACE" -o json 2> /dev/null | grep -o '"jwtJwksFile"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1 | cut -d '"' -f 4)"
+
 mkdir -p tmp
 VALUES_FILE="tmp/values-secrets.yaml"
 : > "$VALUES_FILE"
@@ -105,20 +156,39 @@ chmod 600 "$VALUES_FILE"
 trap 'rm -f "$VALUES_FILE"' EXIT
 
 {
-    if [[ -n "$RUNTIME_ENV" ]]; then printf 'runtimeEnv: %s\n' "$(yaml_sq "$RUNTIME_ENV")"; fi
-    if [[ -n "$AGENTOS_URL" ]]; then printf 'agentosUrl: %s\n' "$(yaml_sq "$AGENTOS_URL")"; fi
-    if [[ -n "$JWT_JWKS_FILE" ]]; then printf 'jwtJwksFile: %s\n' "$(yaml_sq "$JWT_JWKS_FILE")"; fi
+    # Every key the env file can carry is written on every sync, empty when
+    # the line is gone: the upgrade runs with --reuse-values, which merges and
+    # never deletes, so a removed line would otherwise stay in the release (a
+    # stale JWT_JWKS_FILE keeps crashing the pod after the PEM lands). The
+    # chart treats an empty value as unset. DB_PASS is the one exception.
+    printf 'runtimeEnv: %s\n' "$(yaml_sq "${RUNTIME_ENV:-prd}")"
+    printf 'agentosUrl: %s\n' "$(yaml_sq "$AGENTOS_URL")"
+    if [[ -n "$JWKS_LOCAL" ]]; then
+        printf 'jwtJwksFile: /etc/agentos/jwks.json\n'
+    elif [[ -z "$CURRENT_JWKS_FILE" || "$CURRENT_JWKS_FILE" == "/etc/agentos/jwks.json" ]]; then
+        # Only clear a path the scripts put there. A different path means a
+        # file baked into a custom image, set directly via helm — leave it.
+        printf "jwtJwksFile: ''\n"
+    fi
     printf 'secrets:\n'
     printf '  openaiApiKey: %s\n' "$(yaml_sq "$OPENAI_API_KEY")"
     if [[ -n "$JWT_VERIFICATION_KEY" ]]; then
         printf '  jwtVerificationKey: |-\n'
         printf '%s\n' "$JWT_VERIFICATION_KEY" | sed 's/^/    /'
+    else
+        printf "  jwtVerificationKey: ''\n"
     fi
-    if [[ -n "$MCP_CONNECT_SECRET" ]]; then printf '  mcpConnectSecret: %s\n' "$(yaml_sq "$MCP_CONNECT_SECRET")"; fi
-    if [[ -n "$AGENTOS_MCP_SIGNING_KEY" ]]; then printf '  agentosMcpSigningKey: %s\n' "$(yaml_sq "$AGENTOS_MCP_SIGNING_KEY")"; fi
-    if [[ -n "$PARALLEL_API_KEY" ]]; then printf '  parallelApiKey: %s\n' "$(yaml_sq "$PARALLEL_API_KEY")"; fi
-    if [[ -n "$SLACK_BOT_TOKEN" ]]; then printf '  slackBotToken: %s\n' "$(yaml_sq "$SLACK_BOT_TOKEN")"; fi
-    if [[ -n "$SLACK_SIGNING_SECRET" ]]; then printf '  slackSigningSecret: %s\n' "$(yaml_sq "$SLACK_SIGNING_SECRET")"; fi
+    if [[ -n "$JWKS_LOCAL" ]]; then
+        printf '  jwtJwks: |-\n'
+        printf '%s\n' "$(cat "$JWKS_LOCAL")" | sed 's/^/    /'
+    elif [[ -z "$CURRENT_JWKS_FILE" || "$CURRENT_JWKS_FILE" == "/etc/agentos/jwks.json" ]]; then
+        printf "  jwtJwks: ''\n"
+    fi
+    printf '  mcpConnectSecret: %s\n' "$(yaml_sq "$MCP_CONNECT_SECRET")"
+    printf '  agentosMcpSigningKey: %s\n' "$(yaml_sq "$AGENTOS_MCP_SIGNING_KEY")"
+    printf '  parallelApiKey: %s\n' "$(yaml_sq "$PARALLEL_API_KEY")"
+    printf '  slackBotToken: %s\n' "$(yaml_sq "$SLACK_BOT_TOKEN")"
+    printf '  slackSigningSecret: %s\n' "$(yaml_sq "$SLACK_SIGNING_SECRET")"
     # DB_PASS only when the env file carries one — otherwise the release
     # keeps its current password (never regenerate against a live volume).
     if [[ -n "$DB_PASS" ]]; then
