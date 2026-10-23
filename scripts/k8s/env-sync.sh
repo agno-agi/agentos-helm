@@ -87,10 +87,12 @@ yaml_sq() {
 
 load_env_file "$ENV_FILE"
 
-if [[ -z "$OPENAI_API_KEY" ]]; then
+if [[ -z "$OPENAI_API_KEY" || "$OPENAI_API_KEY" == "sk-***" ]]; then
     echo "OPENAI_API_KEY not set in ${ENV_FILE} — refusing to sync an empty key."
     exit 1
 fi
+# example.env ships the Claude key as a placeholder; never deploy it as a value.
+[[ "$ANTHROPIC_API_KEY" == "sk-***" ]] && ANTHROPIC_API_KEY=""
 
 echo ""
 echo -e "${ORANGE}▸${NC} ${BOLD}Syncing env vars${NC}"
@@ -110,6 +112,8 @@ trap 'rm -f "$VALUES_FILE"' EXIT
     if [[ -n "$JWT_JWKS_FILE" ]]; then printf 'jwtJwksFile: %s\n' "$(yaml_sq "$JWT_JWKS_FILE")"; fi
     printf 'secrets:\n'
     printf '  openaiApiKey: %s\n' "$(yaml_sq "$OPENAI_API_KEY")"
+    if [[ -n "$ANTHROPIC_API_KEY" ]]; then printf '  anthropicApiKey: %s\n' "$(yaml_sq "$ANTHROPIC_API_KEY")"; fi
+    if [[ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]]; then printf '  claudeCodeOauthToken: %s\n' "$(yaml_sq "$CLAUDE_CODE_OAUTH_TOKEN")"; fi
     if [[ -n "$JWT_VERIFICATION_KEY" ]]; then
         printf '  jwtVerificationKey: |-\n'
         printf '%s\n' "$JWT_VERIFICATION_KEY" | sed 's/^/    /'

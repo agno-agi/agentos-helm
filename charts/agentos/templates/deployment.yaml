@@ -8,6 +8,12 @@ spec:
   # One replica by design — the scheduler runs in-process; two replicas
   # double-fire every cron (see values.yaml).
   replicas: {{ .Values.replicaCount }}
+  {{- if .Values.checkpoints.enabled }}
+  # The checkpoint claim is ReadWriteOnce: a rolling update would wait on the
+  # old pod to release it forever, so recreate instead.
+  strategy:
+    type: Recreate
+  {{- end }}
   selector:
     matchLabels:
       {{- include "agentos.selectorLabels" . | nindent 6 }}
@@ -67,6 +73,18 @@ spec:
                   key: OPENAI_API_KEY
             {{- /* Optional keys: absent from the Secret ⇒ env var unset,
                    matching the family's env-file semantics. */}}
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentos.secretName" . }}
+                  key: ANTHROPIC_API_KEY
+                  optional: true
+            - name: CLAUDE_CODE_OAUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentos.secretName" . }}
+                  key: CLAUDE_CODE_OAUTH_TOKEN
+                  optional: true
             - name: JWT_VERIFICATION_KEY
               valueFrom:
                 secretKeyRef:
@@ -127,6 +145,17 @@ spec:
             periodSeconds: 20
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.checkpoints.enabled }}
+          volumeMounts:
+            - name: checkpoints
+              mountPath: /data
+          {{- end }}
+      {{- if .Values.checkpoints.enabled }}
+      volumes:
+        - name: checkpoints
+          persistentVolumeClaim:
+            claimName: {{ include "agentos.checkpointsClaimName" . }}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

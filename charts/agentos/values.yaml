@@ -40,11 +40,15 @@ jwtJwksFile: ""
 secrets:
   create: true
   # Name of a pre-created Secret to use instead. Expected keys:
-  # OPENAI_API_KEY (required), JWT_VERIFICATION_KEY, MCP_CONNECT_SECRET,
-  # AGENTOS_MCP_SIGNING_KEY, PARALLEL_API_KEY, SLACK_BOT_TOKEN,
-  # SLACK_SIGNING_SECRET (all optional).
+  # OPENAI_API_KEY (required), ANTHROPIC_API_KEY, CLAUDE_CODE_OAUTH_TOKEN,
+  # JWT_VERIFICATION_KEY, MCP_CONNECT_SECRET, AGENTOS_MCP_SIGNING_KEY,
+  # PARALLEL_API_KEY, SLACK_BOT_TOKEN, SLACK_SIGNING_SECRET (all optional).
   existingSecret: ""
   openaiApiKey: ""
+  # Claude Engineer authenticates with one of these two; Codex Engineer uses
+  # openaiApiKey. Leave both empty to run without Claude Engineer.
+  anthropicApiKey: ""
+  claudeCodeOauthToken: ""
   jwtVerificationKey: ""
   # MCP OAuth consent secret (≥16 chars) — set to turn /mcp into its own
   # OAuth 2.1 authorization server so claude.ai / ChatGPT (web) can connect.
@@ -58,9 +62,22 @@ secrets:
   slackBotToken: ""
   slackSigningSecret: ""
 
-# Extra environment variables for the api container (e.g. ENABLE_DEPLOY_CHECK,
-# EVALS_TAG — see the README env table).
+# Extra environment variables for the api container (e.g. CLAUDE_CODE_USE_BEDROCK
+# and AWS_REGION to run Claude through Bedrock — see docs/sandboxes.md).
 extraEnv: []
+
+# AgentCore sandbox checkpoints live on a persistent volume mounted at /data;
+# app/sandbox.py refuses agentcore_sandbox() without that mount. Off by
+# default — enable it before switching sandbox_provider() to AgentCore. The
+# claim is ReadWriteOnce, so the deployment rolls with Recreate while this is
+# on (one replica by design anyway). Give the pod AWS access separately (IRSA
+# or extraEnv credentials); the chart only provides the storage.
+checkpoints:
+  enabled: false
+  size: 10Gi
+  storageClass: ""
+  # Pre-created PersistentVolumeClaim to mount instead of creating one.
+  existingClaim: ""
 
 service:
   type: ClusterIP
