@@ -11,7 +11,8 @@
 #
 #    Prerequisites:
 #      - kubectl pointed at the target cluster, helm 3+
-#      - OPENAI_API_KEY set in environment (or .env / .env.production)
+#      - OPENAI_API_KEY set in environment (or .env / .env.production);
+#        ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN there too for Claude Engineer
 #      - An image the cluster can pull. Default: the official agnohq/agentos.
 #        Customized the platform? Build your own:
 #          docker build -t <registry>/agentos:<tag> . && docker push …
@@ -20,7 +21,8 @@
 #
 #    Overrides (env vars): AGENTOS_NAMESPACE (agentos), AGENTOS_RELEASE
 #    (agentos), IMAGE_REPOSITORY, IMAGE_TAG, IMAGE_PULL_POLICY,
-#    INGRESS_HOST, INGRESS_CLASS.
+#    INGRESS_HOST, INGRESS_CLASS, AGENTOS_CHECKPOINTS=true (mount a
+#    persistent /data volume for AgentCore sandbox checkpoints).
 #
 #    Deploys into the CURRENT kubectl context (asks first on a TTY; --yes
 #    or non-interactive runs proceed against the printed context). Generates
@@ -198,10 +200,12 @@ if ! command -v helm &> /dev/null; then
     echo "helm not found. Install: https://helm.sh/docs/intro/install/"
     exit 1
 fi
-if [[ -z "$OPENAI_API_KEY" ]]; then
+if [[ -z "$OPENAI_API_KEY" || "$OPENAI_API_KEY" == "sk-***" ]]; then
     echo "OPENAI_API_KEY not set. Add to .env (or .env.production) or export it."
     exit 1
 fi
+# example.env ships the Claude key as a placeholder; never deploy it as a value.
+[[ "$ANTHROPIC_API_KEY" == "sk-***" ]] && ANTHROPIC_API_KEY=""
 
 CONTEXT="$(kubectl config current-context 2> /dev/null || true)"
 if [[ -z "$CONTEXT" ]]; then
@@ -317,8 +321,13 @@ trap 'rm -f "$VALUES_FILE"' EXIT
         printf 'ingress:\n  enabled: true\n  host: %s\n' "$(yaml_sq "$INGRESS_HOST")"
         if [[ -n "$INGRESS_CLASS" ]]; then printf '  className: %s\n' "$(yaml_sq "$INGRESS_CLASS")"; fi
     fi
+    if [[ "${AGENTOS_CHECKPOINTS:-}" == "true" ]]; then
+        printf 'checkpoints:\n  enabled: true\n'
+    fi
     printf 'secrets:\n'
     printf '  openaiApiKey: %s\n' "$(yaml_sq "$OPENAI_API_KEY")"
+    if [[ -n "$ANTHROPIC_API_KEY" ]]; then printf '  anthropicApiKey: %s\n' "$(yaml_sq "$ANTHROPIC_API_KEY")"; fi
+    if [[ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]]; then printf '  claudeCodeOauthToken: %s\n' "$(yaml_sq "$CLAUDE_CODE_OAUTH_TOKEN")"; fi
     if [[ -n "$JWT_VERIFICATION_KEY" ]]; then
         printf '  jwtVerificationKey: |-\n'
         printf '%s\n' "$JWT_VERIFICATION_KEY" | sed 's/^/    /'

@@ -1,0 +1,17 @@
+{{- if and .Values.checkpoints.enabled (not .Values.checkpoints.existingClaim) }}
+# Persistent /data for AgentCore sandbox checkpoints (values.yaml: checkpoints).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "agentos.checkpointsClaimName" . }}
+  labels:
+    {{- include "agentos.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.checkpoints.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.checkpoints.size }}
+{{- end }}

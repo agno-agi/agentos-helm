@@ -188,8 +188,10 @@ You'll need kubectl pointed at the intended cluster, Helm 3 or newer, Docker, a 
 [ -f .env.production ] || cp example.env .env.production
 ```
 
-Add `OPENAI_API_KEY` and any other model keys you use. Keep `RUNTIME_ENV=prd`
-or leave it unset. The scripts read `.env.production` before `.env`.
+Add `OPENAI_API_KEY` and any other model keys you use, such as `ANTHROPIC_API_KEY`
+or `CLAUDE_CODE_OAUTH_TOKEN` for Claude Engineer. Keep `RUNTIME_ENV=prd` or leave
+it unset. The scripts read `.env.production` before `.env` and pass every model key
+to the chart as a Secret.
 
 Build and push this checkout to your registry so the deployment uses this version. Do not assume the chart's default `latest` image contains these changes.
 
@@ -260,10 +262,12 @@ the original deployment. Environment sync reads the production env file.
 ### Sandbox storage
 
 Local Docker sandbox instructions are in the [sandbox guide](docs/sandboxes.md).
-The production deployment does not provision sandbox checkpoint storage.
-Before enabling AWS AgentCore, configure persistent storage mounted at `/data`
-on the API service and give it AWS access. If your deployment cannot provide
-that mount, leave AgentCore disabled. Keep one API instance.
+The production deployment does not attach sandbox checkpoint storage by default.
+Before enabling AWS AgentCore, deploy with `AGENTOS_CHECKPOINTS=true ./scripts/k8s/up.sh`
+(or set `checkpoints.enabled=true` in your values) so the chart mounts a persistent
+volume at `/data`, then give the pod AWS access through IRSA or `extraEnv`. The
+claim is ReadWriteOnce, so the deployment rolls with Recreate while it is on.
+If you skip the volume, leave AgentCore disabled. Keep one API instance.
 
 ## Verify and develop
 
