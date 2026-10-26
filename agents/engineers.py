@@ -26,6 +26,8 @@ claude_engineer = ClaudeAgent(
     repository=repository,
     system_prompt={"type": "preset", "preset": "claude_code"},
     permission_mode="acceptEdits",
+    # Exact rule: lets the agent run the repo checks without a prompt nothing here can answer.
+    allowed_tools=["Bash(./scripts/validate.sh)"],
 )
 codex_engineer = CodexAgent(
     id="codex-engineer",

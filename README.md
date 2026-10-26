@@ -245,6 +245,19 @@ uvx agno connect --url https://YOUR-DOMAIN
 
 Try asking OS Manager about the platform to check that the connection works.
 
+`/mcp` accepts localhost and the host in `AGENTOS_URL`. To also reach it by an in-cluster
+Service name while `AGENTOS_URL` is your public URL, list those names (hostnames only, no
+wildcards or ports) through the chart's `extraEnv`:
+
+```yaml
+agentosUrl: https://os.example.com
+extraEnv:
+  - name: MCP_ALLOWED_HOSTS
+    value: agentos-agentos,agentos-agentos.agentos,agentos-agentos.agentos.svc.cluster.local
+```
+
+Use your release's Service name. A request for any other host gets `invalid_host`.
+
 ### Update or remove the deployment
 
 | What you want to do | Command |
@@ -310,6 +323,7 @@ add the others when you need them. Use `.env` locally and `.env.production` for 
 | `JWT_VERIFICATION_KEY` or `JWT_JWKS_FILE` | Check login tokens in production. A JWKS file must be available on the server. |
 | `AGENTOS_URL` | Public URL used by scheduled jobs and MCP. Deployment scripts save it for you. |
 | `MCP_CONNECT_SECRET` | Connect browser MCP clients. Deployment scripts generate it for you. |
+| `MCP_ALLOWED_HOSTS` | Comma-separated extra hostnames `/mcp` accepts besides localhost and the `AGENTOS_URL` host. Hostnames only: no wildcards, ports or URLs. Empty by default. |
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASS`, `DB_DATABASE` | PostgreSQL connection settings. Local Compose configures these for you. |
 | `RUNTIME_ENV` | `prd` by default. Local Compose uses `dev`, which disables token checks. |
 

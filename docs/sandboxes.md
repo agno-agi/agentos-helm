@@ -74,6 +74,27 @@ access to the model, and set Claude's model to a supported Bedrock inference pro
 These settings are not copied from the host automatically. For a private repository,
 supply `GITHUB_READ_TOKEN` through the same mapping, reading it from your secret store.
 
+## Codex sandbox under Docker Compose
+
+Codex Engineer runs its commands inside its own sandbox. Docker's default seccomp
+profile blocks the namespace calls that sandbox needs, so every command fails with
+`bwrap: No permissions to create a new namespace`. `compose.yaml` therefore loads
+[scripts/seccomp-codex.json](../scripts/seccomp-codex.json): Docker's default profile
+plus one rule allowing `clone`, `mount`, `umount2` and `pivot_root`. The container is not
+privileged and gains no capabilities, but the rule applies to every process in the API
+container, which can now create user, mount and process namespaces.
+
+The profile is a copy of the `moby/profiles` default
+(commit `6fe7deb1b9fb7c0397a4593480d7d22b9ee8caef`, seccomp/default.json) and does not
+follow Docker's later changes. Recopy it from Docker's current default and re-add the
+rule when you upgrade Docker. Those four calls are the minimum on the tested setup only:
+Docker Desktop 29.6.1, Linux 6.12.76 (arm64), Codex CLI 0.163.0. A Linux host with
+AppArmor or disabled user namespaces needs its own check.
+
+The Helm chart is unchanged. In the tested Kubernetes cluster the `RuntimeDefault`
+seccomp profile failed with the same error, so a Kubernetes deployment needs its own
+decision before Codex Engineer can run there.
+
 ## Company Tasks
 
 Before using a sandbox for Company Tasks, check that the Product's saved Git Source

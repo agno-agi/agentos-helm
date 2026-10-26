@@ -117,8 +117,6 @@ How you <work>:
     model=default_model(),
     db=get_postgres_db(),
     learning=shared_learning,
-    # Identity fallback for unauthenticated runs (dev MCP, evals).
-    user_id="anonymous-user",
     tools=[...],
     instructions=INSTRUCTIONS,
     add_datetime_to_context=True,
@@ -128,7 +126,7 @@ How you <work>:
 ```
 
 - No `offload_tool_results` — that's for the OS Manager and its internal members only.
-- Drop `learning=`/`user_id` only for a stated reason. Company knowledge belongs in Company wiki. For a notebook, import `shared_notes` from `app.registry` and add `shared_notes.tools()` to `tools`. User scoping follows AgentOS user isolation; keep personal profiles in per-user learning.
+- No fixed `user_id`: the user comes from the caller. A fixed one makes AgentOS Manager refuse anonymous delegation (dev MCP), and anonymous runs have no per-user learning and unowned sessions. Drop `learning=` only for a stated reason. Company knowledge belongs in Company wiki. For a notebook, import `shared_notes` from `app.registry` and add `shared_notes.tools()` to `tools`. User scoping follows AgentOS user isolation; keep personal profiles in per-user learning.
 - **Every line ≤120 characters, `INSTRUCTIONS` included** — the repo lints `E501` and ruff won't reflow string literals. Wrap long bullets with a two-space hanging indent.
 
 ### The product agent
