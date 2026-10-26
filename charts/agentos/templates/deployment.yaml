@@ -5,15 +5,8 @@ metadata:
   labels:
     {{- include "agentos.labels" . | nindent 4 }}
 spec:
-  # One replica by design — the scheduler runs in-process; two replicas
-  # double-fire every cron (see values.yaml).
+  # Start with one API instance; see docs/scaling.md before adding replicas.
   replicas: {{ .Values.replicaCount }}
-  {{- if .Values.checkpoints.enabled }}
-  # The checkpoint claim is ReadWriteOnce: a rolling update would wait on the
-  # old pod to release it forever, so recreate instead.
-  strategy:
-    type: Recreate
-  {{- end }}
   selector:
     matchLabels:
       {{- include "agentos.selectorLabels" . | nindent 6 }}
@@ -145,17 +138,6 @@ spec:
             periodSeconds: 20
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          {{- if .Values.checkpoints.enabled }}
-          volumeMounts:
-            - name: checkpoints
-              mountPath: /data
-          {{- end }}
-      {{- if .Values.checkpoints.enabled }}
-      volumes:
-        - name: checkpoints
-          persistentVolumeClaim:
-            claimName: {{ include "agentos.checkpointsClaimName" . }}
-      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

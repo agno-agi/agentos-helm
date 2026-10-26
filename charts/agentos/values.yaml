@@ -19,9 +19,7 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
-# One replica BY DESIGN: the scheduler runs in-process, so two replicas
-# double-fire every cron. Scale out only after making the scheduler
-# single-instance.
+# Start with one API instance. Follow docs/scaling.md before adding replicas.
 replicaCount: 1
 
 # "dev" disables JWT auth — local clusters only. Anything else (default
@@ -65,19 +63,6 @@ secrets:
 # Extra environment variables for the api container (e.g. CLAUDE_CODE_USE_BEDROCK
 # and AWS_REGION to run Claude through Bedrock — see docs/sandboxes.md).
 extraEnv: []
-
-# AgentCore sandbox checkpoints live on a persistent volume mounted at /data;
-# app/sandbox.py refuses agentcore_sandbox() without that mount. Off by
-# default — enable it before switching sandbox_provider() to AgentCore. The
-# claim is ReadWriteOnce, so the deployment rolls with Recreate while this is
-# on (one replica by design anyway). Give the pod AWS access separately (IRSA
-# or extraEnv credentials); the chart only provides the storage.
-checkpoints:
-  enabled: false
-  size: 10Gi
-  storageClass: ""
-  # Pre-created PersistentVolumeClaim to mount instead of creating one.
-  existingClaim: ""
 
 service:
   type: ClusterIP
