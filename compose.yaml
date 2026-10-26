@@ -47,6 +47,11 @@ services:
       - agentos-db
     networks:
       - agentos
+    # Codex Engineer's own sandbox (bubblewrap) needs namespace calls that Docker's default seccomp
+    # profile blocks. This profile is that default plus clone, mount, umount2 and pivot_root; see
+    # docs/sandboxes.md. It applies to every process in this container.
+    security_opt:
+      - seccomp=./scripts/seccomp-codex.json
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
