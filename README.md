@@ -276,6 +276,19 @@ available in the [sandbox guide](docs/harnesses.md#local-docker-sandbox).
 
 Before running multiple API instances, follow [Scaling](docs/scaling.md).
 
+### Upgrading legacy checkpoint storage
+
+If an older release enabled `checkpoints.enabled`, keep its existing checkpoint
+values on the first upgrade (the redeploy and env-sync scripts use `--reuse-values`).
+The chart retains that claim and marks it `helm.sh/resource-policy: keep`; the new
+API does not mount it. Back up its files before migrating to S3. Existing local
+checkpoints are not automatically copied or restored from S3.
+
+After verifying the backup and the new sandbox setup, you can disable the legacy
+checkpoint setting. The claim remains for deliberate cleanup and may continue to
+incur storage charges. A claim supplied through `checkpoints.existingClaim` remains
+operator-owned. New installations leave legacy storage disabled.
+
 ### Coding agent backend
 
 The chart selects `sandboxProvider: agentcore`. Put ARN, checkpoint bucket/prefix

@@ -67,6 +67,15 @@ secrets:
 # and AWS_REGION to run Claude through Bedrock — see docs/harnesses.md).
 extraEnv: []
 
+# Legacy checkpoint storage only. Preserve existing values during upgrades;
+# the API no longer mounts this claim. Back it up before migrating to S3.
+# New installations should leave this disabled.
+checkpoints:
+  enabled: false
+  size: 10Gi
+  storageClass: ""
+  existingClaim: ""
+
 service:
   type: ClusterIP
   port: 8000

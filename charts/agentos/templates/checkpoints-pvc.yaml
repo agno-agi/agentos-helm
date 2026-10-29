@@ -1,0 +1,19 @@
+{{- if and .Values.checkpoints.enabled (not .Values.checkpoints.existingClaim) }}
+# Preserve legacy checkpoint claims during the move to S3; no API mount.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "agentos.checkpointsClaimName" . }}
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    {{- include "agentos.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.checkpoints.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.checkpoints.size }}
+{{- end }}

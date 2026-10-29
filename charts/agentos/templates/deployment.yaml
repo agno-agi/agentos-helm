@@ -39,7 +39,7 @@ spec:
             - name: RUNTIME_ENV
               value: {{ .Values.runtimeEnv | quote }}
             - name: SANDBOX_PROVIDER
-              value: {{ .Values.sandboxProvider | quote }}
+              value: {{ default "agentcore" .Values.sandboxProvider | quote }}
             - name: WAIT_FOR_DB
               value: "True"
             - name: AGENTOS_URL
