@@ -21,8 +21,8 @@
 #
 #    Overrides (env vars): AGENTOS_NAMESPACE (agentos), AGENTOS_RELEASE
 #    (agentos), IMAGE_REPOSITORY, IMAGE_TAG, IMAGE_PULL_POLICY,
-#    INGRESS_HOST, INGRESS_CLASS, AGENTOS_CHECKPOINTS=true (mount a
-#    persistent /data volume for AgentCore sandbox checkpoints).
+#    INGRESS_HOST, INGRESS_CLASS. Optional AgentCore checkpoints use S3
+#    (see docs/harnesses.md).
 #
 #    Deploys into the CURRENT kubectl context (asks first on a TTY; --yes
 #    or non-interactive runs proceed against the printed context). Generates
@@ -320,9 +320,6 @@ trap 'rm -f "$VALUES_FILE"' EXIT
     if [[ -n "$INGRESS_HOST" ]]; then
         printf 'ingress:\n  enabled: true\n  host: %s\n' "$(yaml_sq "$INGRESS_HOST")"
         if [[ -n "$INGRESS_CLASS" ]]; then printf '  className: %s\n' "$(yaml_sq "$INGRESS_CLASS")"; fi
-    fi
-    if [[ "${AGENTOS_CHECKPOINTS:-}" == "true" ]]; then
-        printf 'checkpoints:\n  enabled: true\n'
     fi
     printf 'secrets:\n'
     printf '  openaiApiKey: %s\n' "$(yaml_sq "$OPENAI_API_KEY")"
