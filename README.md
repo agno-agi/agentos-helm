@@ -202,8 +202,8 @@ Build and push this checkout to your registry so the deployment uses this versio
 Installs [charts/agentos](charts/agentos) in your current Kubernetes context. The script shows the context before proceeding. Configure an ingress controller and HTTPS for your public hostname.
 
 ```sh
-docker build -t YOUR_REGISTRY/agentos:agno-3.1.10 .
-docker push YOUR_REGISTRY/agentos:agno-3.1.10
+docker build -t YOUR_REGISTRY/agentos:agno-3.1.11 .
+docker push YOUR_REGISTRY/agentos:agno-3.1.11
 ```
 
 Set `IMAGE_REPOSITORY`, `IMAGE_TAG`, and `INGRESS_HOST` in `.env.production` before deployment.
