@@ -26,6 +26,9 @@ replicaCount: 1
 # "prd") requires secrets.jwtVerificationKey or the app refuses traffic.
 runtimeEnv: prd
 
+# Backend selection only; SANDBOX_ENABLED remains False in app/sandbox.py.
+sandboxProvider: agentcore
+
 # Scheduler base URL — cron triggers reach AgentOS over this. Empty picks a
 # sensible default: the public ingress URL when ingress is enabled, else the
 # in-cluster service DNS (which works out of the box). Set it explicitly for
@@ -61,7 +64,7 @@ secrets:
   slackSigningSecret: ""
 
 # Extra environment variables for the api container (e.g. CLAUDE_CODE_USE_BEDROCK
-# and AWS_REGION to run Claude through Bedrock — see docs/sandboxes.md).
+# and AWS_REGION to run Claude through Bedrock — see docs/harnesses.md).
 extraEnv: []
 
 service:

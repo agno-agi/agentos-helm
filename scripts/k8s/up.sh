@@ -22,7 +22,7 @@
 #    Overrides (env vars): AGENTOS_NAMESPACE (agentos), AGENTOS_RELEASE
 #    (agentos), IMAGE_REPOSITORY, IMAGE_TAG, IMAGE_PULL_POLICY,
 #    INGRESS_HOST, INGRESS_CLASS. Optional AgentCore checkpoints use S3
-#    (see docs/sandboxes.md).
+#    (see docs/harnesses.md).
 #
 #    Deploys into the CURRENT kubectl context (asks first on a TTY; --yes
 #    or non-interactive runs proceed against the printed context). Generates
