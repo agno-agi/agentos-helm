@@ -19,14 +19,15 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
-# One replica BY DESIGN: the scheduler runs in-process, so two replicas
-# double-fire every cron. Scale out only after making the scheduler
-# single-instance.
+# Start with one API instance. Follow docs/scaling.md before adding replicas.
 replicaCount: 1
 
 # "dev" disables JWT auth — local clusters only. Anything else (default
 # "prd") requires secrets.jwtVerificationKey or the app refuses traffic.
 runtimeEnv: prd
+
+# Backend selection only; SANDBOX_ENABLED remains False in app/sandbox.py.
+sandboxProvider: agentcore
 
 # Scheduler base URL — cron triggers reach AgentOS over this. Empty picks a
 # sensible default: the public ingress URL when ingress is enabled, else the
@@ -63,20 +64,16 @@ secrets:
   slackSigningSecret: ""
 
 # Extra environment variables for the api container (e.g. CLAUDE_CODE_USE_BEDROCK
-# and AWS_REGION to run Claude through Bedrock — see docs/sandboxes.md).
+# and AWS_REGION to run Claude through Bedrock — see docs/harnesses.md).
 extraEnv: []
 
-# AgentCore sandbox checkpoints live on a persistent volume mounted at /data;
-# app/sandbox.py refuses agentcore_sandbox() without that mount. Off by
-# default — enable it before switching sandbox_provider() to AgentCore. The
-# claim is ReadWriteOnce, so the deployment rolls with Recreate while this is
-# on (one replica by design anyway). Give the pod AWS access separately (IRSA
-# or extraEnv credentials); the chart only provides the storage.
+# Legacy checkpoint storage only. Preserve existing values during upgrades;
+# the API no longer mounts this claim. Back it up before migrating to S3.
+# New installations should leave this disabled.
 checkpoints:
   enabled: false
   size: 10Gi
   storageClass: ""
-  # Pre-created PersistentVolumeClaim to mount instead of creating one.
   existingClaim: ""
 
 service:

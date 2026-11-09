@@ -54,7 +54,7 @@ app.kubernetes.io/component: database
 {{- end -}}
 {{- end -}}
 
-{{/* AgentCore checkpoint claim name */}}
+{{/* Legacy checkpoint claim name */}}
 {{- define "agentos.checkpointsClaimName" -}}
 {{- default (printf "%s-checkpoints" (include "agentos.fullname" .)) .Values.checkpoints.existingClaim | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
