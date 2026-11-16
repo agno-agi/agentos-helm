@@ -21,12 +21,13 @@ No ingress configured — reach it with a port-forward:
 then open http://localhost:8000/docs (MCP at /mcp).
 {{- end }}
 
-{{- if and (ne .Values.runtimeEnv "dev") (not .Values.secrets.jwtVerificationKey) (not .Values.secrets.existingSecret) }}
+{{- if and (ne .Values.runtimeEnv "dev") (not .Values.secrets.jwtVerificationKey) (not .Values.jwtJwksFile) (not .Values.secrets.jwtJwks) (not .Values.secrets.existingSecret) }}
 
-WARNING: RUNTIME_ENV={{ .Values.runtimeEnv }} with no JWT_VERIFICATION_KEY —
-AgentOS refuses to serve traffic until you add one. Mint it at
-https://os.agno.com (Connect OS → Live), add it to your env file, and run
-./scripts/k8s/env-sync.sh.
+WARNING: RUNTIME_ENV={{ .Values.runtimeEnv }} with no JWT_VERIFICATION_KEY (or JWKS) —
+the app exits at startup rather than serve unauthenticated, so the pod
+crash-loops until you add one. Mint it at https://os.agno.com
+(Connect OS → Live), add it to your env file, and run
+./scripts/k8s/env-sync.sh — it rolls the pod and waits for it to come up.
 {{- end }}
 
 Connect the OS at https://os.agno.com, or register the MCP endpoint in your
